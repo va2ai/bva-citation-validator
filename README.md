@@ -58,31 +58,54 @@ The architecture is identical — swap the domain-specific extractors and the ve
 npm install
 ```
 
-### Grounded mode (with hallucination guardrails)
+### Web GUI (recommended)
+
 ```bash
-ANTHROPIC_API_KEY=sk-... node validator.js
+ANTHROPIC_API_KEY=sk-... node server.js
+# Open http://localhost:4000
 ```
 
-All citations verified. The sentinel tags and grounding constraint keep the model anchored to source data:
+With live BVA API verification:
+```bash
+ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node server.js
+```
 
+The GUI provides:
+- **Example query dropdown** — pre-built queries covering PTSD rating criteria, MST evidence, TBI secondary connection, cross-case comparison
+- **Model selector** — switch between Claude Sonnet 4.6, Haiku 4.5, Opus 4.6, or Sonnet 4.5
+- **System prompt editor** — view and customize both the grounded and ungrounded system prompts in real time
+- **Compare Both** — runs grounded and ungrounded side-by-side so you can see the hallucination delta
+- **Validation report** — each citation color-coded: green (VERIFIED), red (HALLUCINATED), amber (NOT_IN_SOURCES), purple (UNGROUNDED)
+
+### CLI
+
+```bash
+# Grounded (with hallucination guardrails)
+ANTHROPIC_API_KEY=sk-... node validator.js
+
+# Ungrounded (demonstrates what the validator catches)
+ANTHROPIC_API_KEY=sk-... node validator.js --ungrounded
+
+# With live API verification
+ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node validator.js --ungrounded
+```
+
+### What you'll see
+
+**Grounded mode** — all citations verified, model stays anchored to source data:
 ```
 SUMMARY
-  Total citations extracted:  3
-  Verified (source + API):    3
+  Total citations extracted:  4
+  Verified (source + API):    4
   All citations verified against sentinel-tagged source context.
 ```
 
-### Ungrounded mode (demonstrates what the validator catches)
-```bash
-ANTHROPIC_API_KEY=sk-... node validator.js --ungrounded
-```
-
-Removes the grounding constraint to show the model interpolating citations from training knowledge:
-
+**Ungrounded mode** — validator catches fabricated citations:
 ```
 SUMMARY
-  Total citations extracted:  16
-  Verified (source + API):    12
+  Total citations extracted:  11
+  Verified (source + API):    6
+  Not in source context:      1
   Confirmed hallucinations:   4   <- fabricated citations
 
   ACTION: Response contains citations not grounded in retrieved sources.
@@ -90,14 +113,7 @@ SUMMARY
   validation warning surfaced to the practitioner.
 ```
 
-The 4 confirmed hallucinations are the exact "interpolated identifier" failure mode — the model generated plausible-looking legal citations from patterns internalized during training, none of which appeared in the provided source context.
-
-### With live API verification
-```bash
-ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node validator.js --ungrounded
-```
-
-Adds a second verification layer: each extracted citation is checked against a live API to distinguish between fabricated identifiers (no match anywhere) and ungrounded-but-real identifiers (exist in the corpus but weren't in the retrieval context).
+The hallucinations are the exact "interpolated identifier" failure mode — the model generates plausible-looking CAVC case references and CFR sections from training knowledge, none of which appeared in the source context. The live API confirms they don't exist in the corpus either.
 
 ## Architecture
 
