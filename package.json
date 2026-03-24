@@ -1,0 +1,14 @@
+{
+  "name": "bva-citation-validator",
+  "version": "1.0.0",
+  "description": "Post-generation citation validator for BVA legal intelligence platform",
+  "type": "module",
+  "main": "validator.js",
+  "scripts": {
+    "start": "node validator.js",
+    "validate": "node validator.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  }
+}
