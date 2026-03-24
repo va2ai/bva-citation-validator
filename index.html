@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Citation Validator — BVA Legal Intelligence</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --border: #1e2d3d;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --purple: #a78bfa;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+  }
+  .header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .header p { font-size: 12px; color: var(--text2); }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(59,130,246,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(59,130,246,0.3);
+    margin-left: 12px;
+    vertical-align: middle;
+  }
+
+  /* Layout */
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
+
+  /* Query panel */
+  .query-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .query-panel label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text2);
+    margin-bottom: 8px;
+  }
+  .query-panel textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 12px;
+    border-radius: 4px;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .query-panel textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 12px; margin-top: 16px; }
+  .btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-grounded {
+    background: rgba(34,197,94,0.1);
+    color: var(--green);
+    border-color: rgba(34,197,94,0.3);
+  }
+  .btn-grounded:hover:not(:disabled) { background: rgba(34,197,94,0.2); }
+  .btn-ungrounded {
+    background: rgba(239,68,68,0.1);
+    color: var(--red);
+    border-color: rgba(239,68,68,0.3);
+  }
+  .btn-ungrounded:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
+  .btn-both {
+    background: rgba(59,130,246,0.1);
+    color: var(--accent);
+    border-color: rgba(59,130,246,0.3);
+  }
+  .btn-both:hover:not(:disabled) { background: rgba(59,130,246,0.2); }
+
+  /* Results grid */
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .results-grid.single { grid-template-columns: 1fr; }
+
+  /* Result panel */
+  .result-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .result-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .result-header h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .result-header.grounded h2 { color: var(--green); }
+  .result-header.ungrounded h2 { color: var(--red); }
+
+  /* Steps */
+  .step {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+  }
+  .step:last-child { border-bottom: none; }
+  .step-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text2);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text2);
+  }
+
+  /* Sources */
+  .source-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .source-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+
+  /* Response text */
+  .response-text {
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 4px;
+    white-space: pre-wrap;
+  }
+
+  /* Citation results */
+  .citation {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    border-left: 3px solid var(--border);
+    font-size: 12px;
+  }
+  .citation.VERIFIED { border-left-color: var(--green); }
+  .citation.HALLUCINATED { border-left-color: var(--red); }
+  .citation.UNGROUNDED { border-left-color: var(--purple); }
+  .citation.NOT_IN_SOURCES { border-left-color: var(--amber); }
+
+  .citation-id {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .citation-claim { color: var(--text2); font-size: 11px; margin-bottom: 4px; }
+  .citation-detail { font-size: 10px; color: var(--text2); opacity: 0.7; }
+
+  .status-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .status-VERIFIED { background: rgba(34,197,94,0.15); color: var(--green); }
+  .status-HALLUCINATED { background: rgba(239,68,68,0.15); color: var(--red); }
+  .status-UNGROUNDED { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .status-NOT_IN_SOURCES { background: rgba(245,158,11,0.15); color: var(--amber); }
+
+  /* Summary */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+  }
+  .summary-stat {
+    text-align: center;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 4px;
+  }
+  .summary-stat .num {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .summary-stat .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text2);
+  }
+  .num-verified { color: var(--green); }
+  .num-hallucinated { color: var(--red); }
+  .num-ungrounded { color: var(--purple); }
+  .num-warn { color: var(--amber); }
+  .num-total { color: var(--text); }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-msg {
+    padding: 40px;
+    text-align: center;
+    color: var(--text2);
+    font-size: 12px;
+  }
+
+  /* Token info */
+  .token-info {
+    font-size: 10px;
+    color: var(--text2);
+    opacity: 0.6;
+    padding: 8px 0 0;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Post-Generation Citation Validator <span class="badge">LIVE DEMO</span></h1>
+  <p>Hallucination detection pipeline for BVA Legal Intelligence Platform</p>
+</div>
+
+<div class="container">
+  <div class="query-panel">
+    <label>Query</label>
+    <select id="examples" onchange="document.getElementById('query').value=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text2);font-family:inherit;font-size:11px;padding:8px 12px;border-radius:4px;margin-bottom:8px;cursor:pointer;">
+      <option value="What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.">PTSD rating criteria + BVA decisions for MST/TBI service connection</option>
+      <option value="What is the General Rating Formula for Mental Disorders and how does it apply to a veteran rated at 50% for PTSD who now shows deficiencies in most areas?">Rating increase: 50% to 70% PTSD — what evidence is needed?</option>
+      <option value="Explain the evidentiary standard for military sexual trauma claims under 38 CFR § 3.304(f). What sources can corroborate an MST stressor besides service records?">MST evidentiary standard — what corroborating sources are accepted?</option>
+      <option value="Which BVA decisions in the provided sources granted service connection, and what was the legal basis for each? Compare the nexus evidence across cases.">Cross-case comparison — nexus evidence across all provided BVA decisions</option>
+      <option value="What diagnostic requirements must be met for a PTSD diagnosis to be accepted by VA, and what happens if the diagnosis doesn't conform to DSM-5?">DSM-5 diagnostic requirements for VA PTSD claims</option>
+      <option value="Can a veteran receive service connection for PTSD secondary to a TBI? What evidence did the Board rely on in BVA 23-09881?">Secondary service connection: PTSD from TBI — BVA 23-09881 analysis</option>
+    </select>
+    <textarea id="query">What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.</textarea>
+    <div class="btn-row">
+      <button class="btn btn-grounded" onclick="runSingle(true)">Run Grounded</button>
+      <button class="btn btn-ungrounded" onclick="runSingle(false)">Run Ungrounded</button>
+      <button class="btn btn-both" onclick="runBoth()">Compare Both</button>
+      <select id="model" style="margin-left:auto;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:8px 12px;border-radius:4px;cursor:pointer;">
+        <option value="claude-sonnet-4-6">Sonnet 4.6 (recommended)</option>
+        <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast/cheap)</option>
+        <option value="claude-opus-4-6">Opus 4.6 (most capable)</option>
+        <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+      </select>
+    </div>
+
+    <details style="margin-top:16px;">
+      <summary style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text2);cursor:pointer;user-select:none;">System Prompts (click to view/edit)</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+        <div>
+          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">Grounded Prompt</label>
+          <textarea id="groundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. You answer questions from VA-accredited attorneys, VSOs, and claims agents using ONLY the source materials provided.
+
+GROUNDING RULES (MANDATORY):
+- Every 38 CFR citation, BVA docket number, BVA citation number, and CAVC case citation in your response MUST appear verbatim in the [SOURCE_START]...[SOURCE_END] blocks provided.
+- You may NOT construct, infer, or recall citations from prior knowledge.
+- You may NOT combine or interpolate citation identifiers.
+- If the provided sources are insufficient to fully answer the question, explicitly state what is missing rather than filling gaps from memory.
+- When referencing a specific regulation or decision, include the exact identifier from the source tag.
+
+FORMAT: Use the citation identifiers exactly as they appear in source tags. For CFR sections use "38 CFR § X.XXX" format. For BVA decisions use "BVA XX-XXXXX" format.</textarea>
+        </div>
+        <div>
+          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:6px;">Ungrounded Prompt (deliberately weak)</label>
+          <textarea id="ungroundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. Answer the question thoroughly using the provided materials AND your own knowledge of VA law. Include as many specific BVA citation numbers, CFR sections, and CAVC case references as possible to make the answer authoritative. If you know of additional relevant cases or regulations beyond what is provided, include them.</textarea>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const resultsEl = document.getElementById('results');
+const buttons = document.querySelectorAll('.btn');
+
+function setLoading(on) {
+  buttons.forEach(b => b.disabled = on);
+}
+
+function renderPanel(data, mode) {
+  const isGrounded = mode === 'grounded';
+  const label = isGrounded ? 'Grounded' : 'Ungrounded';
+  const cls = isGrounded ? 'grounded' : 'ungrounded';
+
+  const sources = data.find(s => s.step === 'sources')?.data;
+  const gen = data.find(s => s.step === 'generation')?.data;
+  const ext = data.find(s => s.step === 'extraction')?.data;
+  const val = data.find(s => s.step === 'validation')?.data;
+  const sum = data.find(s => s.step === 'summary')?.data;
+
+  return `
+    <div class="result-panel">
+      <div class="result-header ${cls}">
+        <h2>${label} Generation</h2>
+        <span style="font-size:10px;color:var(--text2)">${gen?.model || ''}</span>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">1</span> Sentinel-tagged sources</div>
+        <div class="source-tags">
+          ${(sources?.sources || []).map(s => `<span class="source-tag">${s}</span>`).join('')}
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">2</span> LLM Response</div>
+        <div class="response-text">${escapeHtml(gen?.text || '')}</div>
+        <div class="token-info">${gen?.tokens?.input || 0} tokens in / ${gen?.tokens?.output || 0} out</div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">3</span> Citation extraction &mdash; ${ext?.count || 0} citations found</div>
+        <div class="token-info">${ext?.tokens?.input || 0} tokens in / ${ext?.tokens?.output || 0} out</div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">4</span> Cross-reference validation</div>
+        ${(val?.results || []).map(r => `
+          <div class="citation ${r.status}">
+            <div class="citation-id">
+              <span class="status-badge status-${r.status}">${r.status}</span>
+              [${(r.type||'').toUpperCase()}] ${escapeHtml(r.identifier)}
+            </div>
+            <div class="citation-claim">${escapeHtml(r.claim || '')}</div>
+            <div class="citation-detail">${escapeHtml(r.detail)}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">5</span> Summary</div>
+        <div class="summary">
+          <div class="summary-stat">
+            <div class="num num-total">${sum?.total || 0}</div>
+            <div class="label">Total</div>
+          </div>
+          <div class="summary-stat">
+            <div class="num num-verified">${sum?.verified || 0}</div>
+            <div class="label">Verified</div>
+          </div>
+          <div class="summary-stat">
+            <div class="num num-warn">${sum?.notInSources || 0}</div>
+            <div class="label">Unverified</div>
+          </div>
+          ${(sum?.ungrounded || 0) > 0 ? `
+          <div class="summary-stat">
+            <div class="num num-ungrounded">${sum.ungrounded}</div>
+            <div class="label">Leaked</div>
+          </div>` : ''}
+          ${(sum?.hallucinated || 0) > 0 ? `
+          <div class="summary-stat">
+            <div class="num num-hallucinated">${sum.hallucinated}</div>
+            <div class="label">Hallucinated</div>
+          </div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function callValidate(query, grounded) {
+  const model = document.getElementById('model').value;
+  const groundedPrompt = document.getElementById('groundedPrompt').value;
+  const ungroundedPrompt = document.getElementById('ungroundedPrompt').value;
+  const systemPrompt = grounded ? groundedPrompt : ungroundedPrompt;
+  const res = await fetch('/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, grounded, model, systemPrompt }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function runSingle(grounded) {
+  const query = document.getElementById('query').value;
+  setLoading(true);
+  resultsEl.innerHTML = `<div class="results-grid single"><div class="result-panel"><div class="loading-msg"><span class="spinner"></span>Running ${grounded ? 'grounded' : 'ungrounded'} validation...</div></div></div>`;
+  try {
+    const data = await callValidate(query, grounded);
+    resultsEl.innerHTML = `<div class="results-grid single">${renderPanel(data, grounded ? 'grounded' : 'ungrounded')}</div>`;
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="results-grid single"><div class="result-panel"><div class="loading-msg" style="color:var(--red)">Error: ${escapeHtml(err.message)}</div></div></div>`;
+  }
+  setLoading(false);
+}
+
+async function runBoth() {
+  const query = document.getElementById('query').value;
+  setLoading(true);
+  resultsEl.innerHTML = `
+    <div class="results-grid">
+      <div class="result-panel"><div class="loading-msg"><span class="spinner"></span>Running grounded...</div></div>
+      <div class="result-panel"><div class="loading-msg"><span class="spinner"></span>Waiting...</div></div>
+    </div>`;
+
+  let groundedData, ungroundedData;
+  try {
+    // Run sequentially to avoid rate limits
+    groundedData = await callValidate(query, true);
+    resultsEl.innerHTML = `
+      <div class="results-grid">
+        ${renderPanel(groundedData, 'grounded')}
+        <div class="result-panel"><div class="loading-msg"><span class="spinner"></span>Running ungrounded...</div></div>
+      </div>`;
+    ungroundedData = await callValidate(query, false);
+    resultsEl.innerHTML = `
+      <div class="results-grid">
+        ${renderPanel(groundedData, 'grounded')}
+        ${renderPanel(ungroundedData, 'ungrounded')}
+      </div>`;
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="results-grid single"><div class="result-panel"><div class="loading-msg" style="color:var(--red)">Error: ${escapeHtml(err.message)}</div></div></div>`;
+  }
+  setLoading(false);
+}
+</script>
+</body>
+</html>

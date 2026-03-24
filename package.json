@@ -5,7 +5,8 @@
   "type": "module",
   "main": "validator.js",
   "scripts": {
-    "start": "node validator.js",
+    "start": "node server.js",
+    "cli": "node validator.js",
     "validate": "node validator.js"
   },
   "dependencies": {
