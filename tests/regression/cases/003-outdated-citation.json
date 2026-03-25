@@ -1,0 +1,11 @@
+{
+  "id": "003",
+  "name": "Outdated/superseded BVA decision cited as current",
+  "failure_mode": "temporal_staleness",
+  "description": "BVA 22-18467 has been superseded by a newer decision. The temporal validation layer should flag citations to this decision as OUTDATED rather than VERIFIED.",
+  "query": "What rating was granted in BVA decision 22-18467 and what criteria were applied?",
+  "expected_correct_citations": ["BVA 22-18467", "38 CFR § 4.130"],
+  "known_bad_citations": [],
+  "expected_outdated": ["BVA 22-18467"],
+  "fix_applied": "temporal_validation"
+}

@@ -8,7 +8,10 @@
     "start": "node server.js",
     "cli": "node validator.js",
     "validate": "node validator.js",
-    "test:fixes": "node fixes.js"
+    "test:fixes": "node fixes.js",
+    "test:regression": "node tests/regression/runner.js",
+    "test": "npm run test:fixes && npm run test:regression",
+    "validate:ungrounded": "node validator.js --ungrounded"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0"
