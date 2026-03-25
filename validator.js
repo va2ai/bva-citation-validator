@@ -15,6 +15,7 @@ import 'dotenv/config';
 
 import Anthropic from "@anthropic-ai/sdk";
 import { runCritic } from "./critic.js";
+import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 
 const client = new Anthropic();
@@ -188,20 +189,6 @@ GROUNDING RULES (MANDATORY):
 - When referencing a specific regulation or decision, include the exact identifier from the source tag.
 
 FORMAT: Use the citation identifiers exactly as they appear in source tags. For CFR sections use "38 CFR § X.XXX" format. For BVA decisions use "BVA XX-XXXXX" format.`;
-
-// ---------------------------------------------------------------------------
-// 3. Citation extraction prompt (second pass)
-// ---------------------------------------------------------------------------
-
-const EXTRACTION_PROMPT = `Extract every legal citation from the following AI-generated response about VA disability claims. Return a JSON array where each element has:
-- "type": one of "cfr", "bva", "cavc", "usc"
-- "identifier": the exact citation string as it appears in the text
-- "claim": a one-sentence summary of what the response claims about this citation
-
-Return ONLY valid JSON. No markdown fences, no commentary.
-
-Response to extract from:
-`;
 
 // ---------------------------------------------------------------------------
 // 4. Build retrieval context string
@@ -408,63 +395,19 @@ async function run() {
     tokens: { input: generationResponse.usage.input_tokens, output: generationResponse.usage.output_tokens },
   });
 
-  // --- Step 2: Citation extraction (second LLM pass) ---
+  // --- Step 2: Citation extraction (second LLM pass via tool use) ---
   console.log("─".repeat(80));
-  console.log("STEP 2: Structured citation extraction (second LLM pass)");
+  console.log("STEP 2: Structured citation extraction (tool-use schema enforcement)");
   console.log("─".repeat(80));
 
-  const extractionResponse = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: EXTRACTION_PROMPT + responseText,
-      },
-    ],
-  });
-
-  let citations;
-  try {
-    let raw = extractionResponse.content[0].text.trim();
-    // Strip markdown fences if present
-    raw = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-    citations = JSON.parse(raw);
-  } catch (e) {
-    // If truncated, try to recover by closing the array
-    try {
-      let raw = extractionResponse.content[0].text.trim();
-      raw = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-      // Find last complete object and close the array
-      const lastBrace = raw.lastIndexOf("}");
-      if (lastBrace > 0) {
-        citations = JSON.parse(raw.slice(0, lastBrace + 1) + "]");
-        console.log("  (Recovered partial JSON — some citations may be missing)");
-      } else {
-        throw e;
-      }
-    } catch {
-      console.error("  Failed to parse extraction response as JSON:");
-      console.error("  ", extractionResponse.content[0].text.slice(0, 300));
-      process.exit(1);
-    }
-  }
-
-  // Deduplicate citations by identifier
-  const seen = new Set();
-  citations = citations.filter((c) => {
-    const key = `${c.type}:${c.identifier}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const { citations, usage: extractionUsage } = await extractCitations(responseText, client);
 
   console.log(`  Extracted ${citations.length} citations from response`);
   console.log();
 
   logStep(session, "extraction", {
     count: citations.length,
-    tokens: { input: extractionResponse.usage.input_tokens, output: extractionResponse.usage.output_tokens },
+    tokens: extractionUsage,
   });
 
   // --- Step 3: Cross-reference validation ---
@@ -685,7 +628,7 @@ async function run() {
     `  Generation tokens: ${generationResponse.usage.input_tokens} in / ${generationResponse.usage.output_tokens} out`
   );
   console.log(
-    `  Extraction tokens: ${extractionResponse.usage.input_tokens} in / ${extractionResponse.usage.output_tokens} out`
+    `  Extraction tokens: ${extractionUsage.input_tokens} in / ${extractionUsage.output_tokens} out`
   );
   console.log(
     `  Critic tokens:     ${criticResult.usage.input_tokens} in / ${criticResult.usage.output_tokens} out`

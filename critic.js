@@ -8,7 +8,46 @@
  * - Unsupported conclusions or reasoning
  * - Citations used in misleading context
  * - Temporal assumptions (assuming current validity without checking)
+ *
+ * Uses the Claude API's structured responses feature (output_config) to
+ * guarantee valid JSON matching a defined schema.
  */
+
+const FINDINGS_SCHEMA = {
+  type: "object",
+  properties: {
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sentence: {
+            type: "string",
+            description:
+              "The problematic sentence from the response (quoted exactly)",
+          },
+          issue: {
+            type: "string",
+            description: "Description of the problem",
+          },
+          severity: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+            description: "Severity level of the issue",
+          },
+          suggestion: {
+            type: "string",
+            description: "What should be done to fix it",
+          },
+        },
+        required: ["sentence", "issue", "severity", "suggestion"],
+      },
+      description:
+        "Array of issues found. Empty array if no issues detected.",
+    },
+  },
+  required: ["findings"],
+};
 
 const CRITIC_PROMPT = `You are a legal citation auditor specializing in VA disability claims. Your job is to find problems that a simple citation-matching validator would MISS.
 
@@ -26,15 +65,7 @@ Look for:
 4. **Temporal assumptions** — response assumes a regulation or decision is current without noting potential staleness
 5. **Aggregation errors** — response combines data from multiple sources in ways that create new (unverified) claims
 
-Return a JSON array of findings. Each finding has:
-- "sentence": the problematic sentence from the response (quote it exactly)
-- "issue": description of the problem
-- "severity": "high" | "medium" | "low"
-- "suggestion": what should be done to fix it
-
-If no issues are found, return an empty array: []
-
-Return ONLY valid JSON. No markdown fences, no commentary.`;
+Return your findings as structured JSON. Use an empty findings array if no issues are found.`;
 
 /**
  * Run the adversarial critic pass.
@@ -56,6 +87,12 @@ export async function runCritic(sources, response, validationResults, client, mo
   const criticResponse = await client.messages.create({
     model: criticModel,
     max_tokens: 4096,
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: FINDINGS_SCHEMA,
+      },
+    },
     messages: [
       {
         role: "user",
@@ -73,25 +110,7 @@ ${validationSummary}`,
     ],
   });
 
-  let findings;
-  try {
-    let raw = criticResponse.content[0].text.trim();
-    raw = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-    findings = JSON.parse(raw);
-  } catch {
-    try {
-      let raw = criticResponse.content[0].text.trim();
-      raw = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-      const lastBrace = raw.lastIndexOf("}");
-      if (lastBrace > 0) {
-        findings = JSON.parse(raw.slice(0, lastBrace + 1) + "]");
-      } else {
-        findings = [];
-      }
-    } catch {
-      findings = [];
-    }
-  }
+  const findings = JSON.parse(criticResponse.content[0].text).findings;
 
   return {
     findings,

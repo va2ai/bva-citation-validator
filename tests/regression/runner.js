@@ -14,6 +14,7 @@ import { readdir, readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import Anthropic from "@anthropic-ai/sdk";
+import { extractCitations } from "../../lib/extract.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CASES_DIR = join(__dirname, "cases");
@@ -154,15 +155,7 @@ GROUNDING RULES (MANDATORY):
 
 FORMAT: Use the citation identifiers exactly as they appear in source tags. For CFR sections use "38 CFR § X.XXX" format. For BVA decisions use "BVA XX-XXXXX" format.`;
 
-const EXTRACTION_PROMPT = `Extract every legal citation from the following AI-generated response about VA disability claims. Return a JSON array where each element has:
-- "type": one of "cfr", "bva", "cavc", "usc"
-- "identifier": the exact citation string as it appears in the text
-- "claim": a one-sentence summary of what the response claims about this citation
-
-Return ONLY valid JSON. No markdown fences, no commentary.
-
-Response to extract from:
-`;
+// Extraction prompt removed — now handled by lib/extract.js via tool-use structured output
 
 function getSourceIds() {
   const ids = new Set();
@@ -203,34 +196,8 @@ async function runPipeline(query) {
   });
   const responseText = genResponse.content[0].text;
 
-  // Step 2: Extraction
-  const extResponse = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: EXTRACTION_PROMPT + responseText }],
-  });
-
-  let citations;
-  try {
-    let raw = extResponse.content[0].text.trim().replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-    citations = JSON.parse(raw);
-  } catch {
-    try {
-      let raw = extResponse.content[0].text.trim().replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-      const lastBrace = raw.lastIndexOf("}");
-      citations = JSON.parse(raw.slice(0, lastBrace + 1) + "]");
-    } catch {
-      citations = [];
-    }
-  }
-
-  const seen = new Set();
-  citations = citations.filter((c) => {
-    const key = `${c.type}:${c.identifier}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // Step 2: Extraction (via tool-use structured output)
+  const { citations } = await extractCitations(responseText, client);
 
   // Step 3: Validation
   const knownIds = getSourceIds();
