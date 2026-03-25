@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(taskkill //F //FI \"WINDOWTITLE eq node*\")",
+      "Bash(node server.js)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(find /c/Users/ccdmn/code/bva-citation-validator -type f \\\\\\(-name *.js -o -name *.html \\\\\\))",
+      "WebSearch",
+      "WebFetch(domain:www.news.aakashg.com)",
+      "WebFetch(domain:venturebeat.com)",
+      "WebFetch(domain:thenewstack.io)",
+      "WebFetch(domain:datasciencedojo.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:fortune.com)",
+      "WebFetch(domain:www.datacamp.com)",
+      "WebFetch(domain:www.mindstudio.ai)",
+      "WebFetch(domain:thecreatorsai.com)",
+      "WebFetch(domain:sidsaladi.substack.com)",
+      "WebFetch(domain:arshkharbanda.hashnode.dev)",
+      "WebFetch(domain:kenhuangus.substack.com)",
+      "WebFetch(domain:www.mager.co)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:officechai.com)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:r2.vaclaims.net)",
+      "Bash(curl -s https://r2.vaclaims.net/file/projects/projects.json -o /tmp/projects.json)",
+      "Bash(node -e \":*)",
+      "Bash(mkdir -p /c/tmp)",
+      "Bash(curl -s https://r2.vaclaims.net/file/projects/projects.json -o /c/tmp/projects.json)",
+      "Bash(curl:*)",
+      "Bash(gcloud run:*)"
+    ]
+  }
+}

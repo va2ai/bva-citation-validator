@@ -67,30 +67,39 @@
   }
 
   /* Layout */
-  .container { max-width: 1300px; margin: 0 auto; padding: 32px 48px; }
-
-  /* Card styling */
-  .card {
+  .app-layout {
+    display: flex;
+    min-height: calc(100vh - 90px);
+  }
+  .sidebar {
+    width: 380px;
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--card-shadow);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-right: 1px solid var(--border);
+    padding: 24px;
+    height: calc(100vh - 90px);
+    position: sticky;
+    top: 90px;
+    overflow-y: auto;
+  }
+  .main-content {
+    flex: 1;
+    padding: 32px 48px;
+    background: var(--bg);
   }
 
-  /* Query panel */
+  /* Query panel refined for sidebar */
   .query-panel {
-    padding: 24px;
-    margin-bottom: 32px;
+    padding: 0;
+    margin-bottom: 0;
   }
   .query-panel label {
     display: block;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
   .query-panel textarea {
     width: 100%;
@@ -98,33 +107,45 @@
     border: 1px solid var(--border);
     color: var(--text);
     font-family: 'SF Mono', monospace;
-    font-size: 14px;
-    padding: 16px;
+    font-size: 13px;
+    padding: 12px;
     border-radius: var(--radius);
     resize: vertical;
-    min-height: 80px;
+    min-height: 120px;
     outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  .query-panel textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-glow);
+    margin-bottom: 20px;
   }
 
-  /* Buttons */
-  .btn-row { display: flex; gap: 12px; margin-top: 20px; align-items: center; }
-  .btn {
-    padding: 10px 18px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Buttons Grouping */
+  .btn-group {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 14px;
+    min-width: 100px;
+  }
+
+  /* Collapsible steps */
+  .step-details summary {
+    cursor: pointer;
+    list-style: none;
+    outline: none;
+  }
+  .step-details summary::-webkit-details-marker { display: none; }
+  .step-details[open] .step-label { margin-bottom: 16px; }
+  .step-details:not([open]) .step-label { margin-bottom: 0; }
+
+  /* Summary at top */
+  .summary-top {
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
   }
   .btn:hover:not(:disabled) {
     transform: translateY(-1px);
@@ -640,55 +661,72 @@
   <p>Hallucination detection pipeline for BVA Legal Intelligence Platform</p>
 </div>
 
-<div class="container">
-  <div class="query-panel">
-    <label>Query</label>
-    <select id="examples" onchange="document.getElementById('query').value=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-muted);font-family:inherit;font-size:11px;padding:8px 12px;border-radius:4px;margin-bottom:8px;cursor:pointer;">
-      <option value="What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.">PTSD rating criteria + BVA decisions for MST/TBI service connection</option>
-      <option value="What is the General Rating Formula for Mental Disorders and how does it apply to a veteran rated at 50% for PTSD who now shows deficiencies in most areas?">Rating increase: 50% to 70% PTSD — what evidence is needed?</option>
-      <option value="Explain the evidentiary standard for military sexual trauma claims under 38 CFR § 3.304(f). What sources can corroborate an MST stressor besides service records?">MST evidentiary standard — what corroborating sources are accepted?</option>
-      <option value="Which BVA decisions in the provided sources granted service connection, and what was the legal basis for each? Compare the nexus evidence across cases.">Cross-case comparison — nexus evidence across all provided BVA decisions</option>
-      <option value="What diagnostic requirements must be met for a PTSD diagnosis to be accepted by VA, and what happens if the diagnosis doesn't conform to DSM-5?">DSM-5 diagnostic requirements for VA PTSD claims</option>
-      <option value="Can a veteran receive service connection for PTSD secondary to a TBI? What evidence did the Board rely on in BVA 23-09881?">Secondary service connection: PTSD from TBI — BVA 23-09881 analysis</option>
-    </select>
-    <textarea id="query">What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.</textarea>
-    <div class="btn-row">
-      <button class="btn btn-grounded" onclick="runSingle(true)">Run Grounded</button>
-      <button class="btn btn-ungrounded" onclick="runSingle(false)">Run Ungrounded</button>
-      <button class="btn btn-both" onclick="runBoth()">Compare Both</button>
-      <button class="btn" style="background:rgba(167,139,250,0.1);color:var(--purple);border-color:rgba(167,139,250,0.3);" onclick="runOptimize(false)">Optimize Prompt</button>
-      <button class="btn" id="resumeBtn" style="display:none;background:rgba(167,139,250,0.05);color:var(--purple);border-color:rgba(167,139,250,0.2);font-size:11px;" onclick="runOptimize(true)">Resume</button>
-      <input id="maxIter" type="number" value="10" min="1" max="50" style="width:45px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:8px 6px;border-radius:4px;text-align:center;" title="Max iterations">
-      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
-        <div style="display:flex;flex-direction:column;gap:2px;">
-          <label style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);">Query Model</label>
-          <select id="model" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:6px 8px;border-radius:4px;cursor:pointer;">
-            <option value="claude-sonnet-4-6">Sonnet 4.6</option>
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
-            <option value="claude-opus-4-6">Opus 4.6</option>
-            <option value="claude-sonnet-4-5">Sonnet 4.5</option>
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-          </select>
+<div class="app-layout">
+  <div class="sidebar">
+    <div class="query-panel">
+      <label>Example Queries</label>
+      <select id="examples" onchange="document.getElementById('query').value=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-muted);font-family:inherit;font-size:12px;padding:10px;border-radius:var(--radius);margin-bottom:16px;cursor:pointer;">
+        <option value="What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.">PTSD rating criteria + BVA decisions</option>
+        <option value="What is the General Rating Formula for Mental Disorders and how does it apply to a veteran rated at 50% for PTSD who now shows deficiencies in most areas?">Rating increase: 50% to 70% PTSD</option>
+        <option value="Explain the evidentiary standard for military sexual trauma claims under 38 CFR § 3.304(f). What sources can corroborate an MST stressor besides service records?">MST evidentiary standard</option>
+        <option value="Which BVA decisions in the provided sources granted service connection, and what was the legal basis for each? Compare the nexus evidence across cases.">Cross-case comparison</option>
+        <option value="What diagnostic requirements must be met for a PTSD diagnosis to be accepted by VA, and what happens if the diagnosis doesn't conform to DSM-5?">DSM-5 diagnostic requirements</option>
+        <option value="Can a veteran receive service connection for PTSD secondary to a TBI? What evidence did the Board rely on in BVA 23-09881?">Secondary SC: PTSD from TBI</option>
+      </select>
+
+      <label>User Query</label>
+      <textarea id="query">What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.</textarea>
+      
+      <div class="btn-group">
+        <label>Run Validation</label>
+        <div class="btn-row">
+          <button class="btn btn-grounded" onclick="runSingle(true)">Grounded</button>
+          <button class="btn btn-ungrounded" onclick="runSingle(false)">Ungrounded</button>
         </div>
-        <div style="display:flex;flex-direction:column;gap:2px;">
-          <label style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);">Optimizer Model</label>
-          <select id="optimizerModel" style="background:var(--bg);border:1px solid rgba(167,139,250,0.3);color:var(--purple);font-family:inherit;font-size:11px;padding:6px 8px;border-radius:4px;cursor:pointer;">
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (default)</option>
-            <option value="claude-sonnet-4-6">Sonnet 4.6</option>
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-          </select>
+        <button class="btn btn-both" onclick="runBoth()">Compare Side-by-Side</button>
+      </div>
+
+      <div class="btn-group">
+        <label>Prompt Engineering</label>
+        <div class="btn-row">
+          <button class="btn" style="background:rgba(167,139,250,0.1);color:var(--purple);border-color:rgba(167,139,250,0.3);" onclick="runOptimize(false)">Optimize</button>
+          <button class="btn" id="resumeBtn" style="display:none;background:rgba(167,139,250,0.05);color:var(--purple);border-color:rgba(167,139,250,0.2);font-size:11px;" onclick="runOptimize(true)">Resume</button>
+          <input id="maxIter" type="number" value="10" min="1" max="50" style="width:50px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:8px;border-radius:var(--radius);text-align:center;" title="Max iterations">
         </div>
       </div>
-    </div>
 
-    <details style="margin-top:16px;">
-      <summary style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);cursor:pointer;user-select:none;">System Prompts (click to view/edit)</summary>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-        <div>
-          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">Grounded Prompt</label>
-          <textarea id="groundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. You answer questions from VA-accredited attorneys, VSOs, and claims agents using ONLY the source materials provided.
+      <div class="btn-group">
+        <label>Model Configuration</label>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px;">Primary Model</div>
+            <select id="model" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:12px;padding:8px;border-radius:var(--radius);cursor:pointer;">
+              <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+              <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+              <option value="claude-opus-4-6">Opus 4.6</option>
+              <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);margin-bottom:4px;">Optimizer Model</div>
+            <select id="optimizerModel" style="width:100%;background:var(--bg);border:1px solid rgba(167,139,250,0.3);color:var(--purple);font-family:inherit;font-size:12px;padding:8px;border-radius:var(--radius);cursor:pointer;">
+              <option value="claude-haiku-4-5-20251001">Haiku 4.5 (default)</option>
+              <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <details style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px;">
+        <summary style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);cursor:pointer;user-select:none;">System Prompts</summary>
+        <div style="display:flex;flex-direction:column;gap:16px;margin-top:16px;">
+          <div>
+            <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">Grounded Prompt</label>
+            <textarea id="groundedPrompt" style="width:100%;height:150px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:var(--radius);resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. You answer questions from VA-accredited attorneys, VSOs, and claims agents using ONLY the source materials provided.
 
 GROUNDING RULES (MANDATORY):
 - Every 38 CFR citation, BVA docket number, BVA citation number, and CAVC case citation in your response MUST appear verbatim in the [SOURCE_START]...[SOURCE_END] blocks provided.
@@ -698,16 +736,24 @@ GROUNDING RULES (MANDATORY):
 - When referencing a specific regulation or decision, include the exact identifier from the source tag.
 
 FORMAT: Use the citation identifiers exactly as they appear in source tags. For CFR sections use "38 CFR § X.XXX" format. For BVA decisions use "BVA XX-XXXXX" format.</textarea>
+          </div>
+          <div>
+            <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:6px;">Ungrounded Prompt</label>
+            <textarea id="ungroundedPrompt" style="width:100%;height:120px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:var(--radius);resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. Answer the question thoroughly using the provided materials AND your own knowledge of VA law. Include as many specific BVA citation numbers, CFR sections, and CAVC case references as possible to make the answer authoritative. If you know of additional relevant cases or regulations beyond what is provided, include them.</textarea>
+          </div>
         </div>
-        <div>
-          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:6px;">Ungrounded Prompt (deliberately weak)</label>
-          <textarea id="ungroundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. Answer the question thoroughly using the provided materials AND your own knowledge of VA law. Include as many specific BVA citation numbers, CFR sections, and CAVC case references as possible to make the answer authoritative. If you know of additional relevant cases or regulations beyond what is provided, include them.</textarea>
-        </div>
-      </div>
-    </details>
+      </details>
+    </div>
   </div>
 
-  <div id="results"></div>
+  <div class="main-content">
+    <div id="results">
+      <div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-direction:column;gap:16px;opacity:0.5;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></select>
+        <p>Enter a query and run validation to see results</p>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -731,7 +777,7 @@ function renderPanel(data, mode) {
   const adv = data.find(s => s.step === 'prompt_advisor')?.data;
   const sum = data.find(s => s.step === 'summary')?.data;
 
-  // Store advisor prompt for copy button (keyed by mode to handle Compare Both)
+  // Store advisor prompt for copy button
   if (adv?.updated_prompt) {
     window._advisorPrompts[mode] = adv.updated_prompt;
   }
@@ -743,12 +789,45 @@ function renderPanel(data, mode) {
         <span style="font-size:10px;color:var(--text-muted)">${gen?.model || ''}</span>
       </div>
 
-      <div class="step">
-        <div class="step-label"><span class="step-num">1</span> Sentinel-tagged sources</div>
+      <div class="summary-top">
+        <div class="summary">
+          <div class="summary-stat">
+            <div class="num num-total">${sum?.total || 0}</div>
+            <div class="label">Total</div>
+          </div>
+          <div class="summary-stat">
+            <div class="num num-verified">${sum?.verified || 0}</div>
+            <div class="label">Verified</div>
+          </div>
+          ${(sum?.outdated || 0) > 0 ? `
+          <div class="summary-stat">
+            <div class="num num-outdated">${sum.outdated}</div>
+            <div class="label">Stale</div>
+          </div>` : ''}
+          <div class="summary-stat">
+            <div class="num num-warn">${sum?.notInSources || 0}</div>
+            <div class="label">Unverified</div>
+          </div>
+          ${(sum?.hallucinated || 0) > 0 ? `
+          <div class="summary-stat">
+            <div class="num num-hallucinated">${sum.hallucinated}</div>
+            <div class="label">Hallucinated</div>
+          </div>` : ''}
+          <div class="summary-stat">
+            <div class="num" style="color:${(cri?.findings?.length || 0) > 0 ? 'var(--amber)' : 'var(--green)'}">${cri?.findings?.length || 0}</div>
+            <div class="label">Issues</div>
+          </div>
+        </div>
+      </div>
+
+      <details class="step step-details">
+        <summary>
+          <div class="step-label"><span class="step-num">1</span> Sentinel-tagged sources <span style="margin-left:auto;font-size:10px;opacity:0.5;">(Click to expand)</span></div>
+        </summary>
         <div class="source-tags">
           ${(sources?.sources || []).map(s => `<span class="source-tag">${s}</span>`).join('')}
         </div>
-      </div>
+      </details>
 
       <div class="step">
         <div class="step-label"><span class="step-num">2</span> LLM Response</div>
@@ -756,10 +835,12 @@ function renderPanel(data, mode) {
         <div class="token-info">${gen?.tokens?.input || 0} tokens in / ${gen?.tokens?.output || 0} out</div>
       </div>
 
-      <div class="step">
-        <div class="step-label"><span class="step-num">3</span> Citation extraction &mdash; ${ext?.count || 0} citations found</div>
+      <details class="step step-details">
+        <summary>
+          <div class="step-label"><span class="step-num">3</span> Citation extraction &mdash; ${ext?.count || 0} found</div>
+        </summary>
         <div class="token-info">${ext?.tokens?.input || 0} tokens in / ${ext?.tokens?.output || 0} out</div>
-      </div>
+      </details>
 
       <div class="step">
         <div class="step-label"><span class="step-num">4</span> Cross-reference validation</div>
@@ -775,8 +856,10 @@ function renderPanel(data, mode) {
         `).join('')}
       </div>
 
-      <div class="step">
-        <div class="step-label"><span class="step-num">5</span> Adversarial critic review &mdash; ${cri?.findings?.length || 0} findings</div>
+      <details class="step step-details" ${(cri?.findings || []).length > 0 ? 'open' : ''}>
+        <summary>
+          <div class="step-label"><span class="step-num">5</span> Adversarial critic review &mdash; ${cri?.findings?.length || 0} findings</div>
+        </summary>
         ${(cri?.findings || []).length === 0
           ? '<div style="font-size:12px;color:var(--green);padding:8px 0;">No issues found &mdash; critic confirms response quality.</div>'
           : (cri?.findings || []).map(f => `
@@ -790,7 +873,7 @@ function renderPanel(data, mode) {
           </div>
         `).join('')}
         <div class="token-info">${cri?.tokens?.input_tokens || 0} tokens in / ${cri?.tokens?.output_tokens || 0} out</div>
-      </div>
+      </details>
 
       ${adv ? `
       <div class="step">
@@ -815,43 +898,6 @@ function renderPanel(data, mode) {
         <div class="token-info">${adv.tokens?.input_tokens || 0} tokens in / ${adv.tokens?.output_tokens || 0} out</div>
       </div>
       ` : ''}
-
-      <div class="step">
-        <div class="step-label"><span class="step-num">${adv ? '7' : '6'}</span> Summary</div>
-        <div class="summary">
-          <div class="summary-stat">
-            <div class="num num-total">${sum?.total || 0}</div>
-            <div class="label">Total</div>
-          </div>
-          <div class="summary-stat">
-            <div class="num num-verified">${sum?.verified || 0}</div>
-            <div class="label">Verified</div>
-          </div>
-          ${(sum?.outdated || 0) > 0 ? `
-          <div class="summary-stat">
-            <div class="num num-outdated">${sum.outdated}</div>
-            <div class="label">Outdated</div>
-          </div>` : ''}
-          <div class="summary-stat">
-            <div class="num num-warn">${sum?.notInSources || 0}</div>
-            <div class="label">Unverified</div>
-          </div>
-          ${(sum?.ungrounded || 0) > 0 ? `
-          <div class="summary-stat">
-            <div class="num num-ungrounded">${sum.ungrounded}</div>
-            <div class="label">Leaked</div>
-          </div>` : ''}
-          ${(sum?.hallucinated || 0) > 0 ? `
-          <div class="summary-stat">
-            <div class="num num-hallucinated">${sum.hallucinated}</div>
-            <div class="label">Hallucinated</div>
-          </div>` : ''}
-          <div class="summary-stat">
-            <div class="num" style="color:${(cri?.findings?.length || 0) > 0 ? 'var(--amber)' : 'var(--green)'}">${cri?.findings?.length || 0}</div>
-            <div class="label">Critic Findings</div>
-          </div>
-        </div>
-      </div>
     </div>
   `;
 }

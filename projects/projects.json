@@ -1,0 +1,138 @@
+{
+  "meta": {
+    "owner": "Chris Combs",
+    "updated": "2026-03-25"
+  },
+  "projects": [
+    {
+      "id": "v2v-counter-ai",
+      "name": "V2V Counter-AI Platform",
+      "description": "Agentic legal engine for VA disability claims — Decision Deconstructor, Nexus Scout, BVA Case Search, VA Math Calculator",
+      "status": "active",
+      "priority": "high",
+      "category": "AI Platform",
+      "tech": ["React", "TypeScript", "LangGraph", "Claude Agent SDK", "PostgreSQL", "pgvector"],
+      "progress": 62,
+      "milestones": [
+        { "label": "Decision Deconstructor MVP", "done": true },
+        { "label": "BVA MCP v2.0 on Cloud Run", "done": true },
+        { "label": "Multi-agent orchestration", "done": false },
+        { "label": "React frontend w/ SSE streaming", "done": false },
+        { "label": "B2B launch to VSOs & attorneys", "done": false }
+      ],
+      "startDate": "2025-10-01",
+      "targetDate": "2026-06-30"
+    },
+    {
+      "id": "bva-mcp-server",
+      "name": "BVA MCP Research Platform",
+      "description": "25+ tool MCP server covering BVA decisions, 38 CFR, CAVC, KnowVA/M21-1, and Federal Register on Cloud Run",
+      "status": "active",
+      "priority": "high",
+      "category": "Infrastructure",
+      "tech": ["Python", "FastMCP", "GCP Cloud Run", "PostgreSQL"],
+      "progress": 85,
+      "milestones": [
+        { "label": "Core BVA search tools", "done": true },
+        { "label": "38 CFR & CAVC integration", "done": true },
+        { "label": "KnowVA / M21-1 tools", "done": true },
+        { "label": "Federal Register tools", "done": true },
+        { "label": "A2A protocol integration", "done": false }
+      ],
+      "startDate": "2025-06-01",
+      "targetDate": "2026-04-30"
+    },
+    {
+      "id": "bva-citation-validator",
+      "name": "BVA Citation Validator",
+      "description": "Hallucination detection system with recursive prompt self-improvement (autoresearch pattern) for LLM-generated VA disability law citations",
+      "status": "active",
+      "priority": "high",
+      "category": "AI Platform",
+      "tech": ["Node.js", "Anthropic SDK", "Google Generative AI", "Multi-provider LLM"],
+      "progress": 75,
+      "milestones": [
+        { "label": "5-layer validation pipeline (sentinel tags, grounding, extraction, critic, advisor)", "done": true },
+        { "label": "Web GUI with real-time validation", "done": true },
+        { "label": "Recursive prompt optimization loop (autoresearch pattern)", "done": true },
+        { "label": "Multi-provider support (Claude + Gemini)", "done": true },
+        { "label": "Optimization persistence, crash recovery, streaming", "done": true },
+        { "label": "Optimization ledger with failure learning", "done": true },
+        { "label": "Production integration with BVA MCP API", "done": false },
+        { "label": "Automated nightly optimization runs", "done": false }
+      ],
+      "startDate": "2026-03-20",
+      "targetDate": "2026-05-31"
+    },
+    {
+      "id": "v2v-marketing",
+      "name": "V2V Marketing & GTM",
+      "description": "Video ads, landing pages, B2B positioning for VA-accredited attorneys, VSOs, and claims agents",
+      "status": "active",
+      "priority": "medium",
+      "category": "Marketing",
+      "tech": ["React", "Video Production", "Landing Pages"],
+      "progress": 40,
+      "milestones": [
+        { "label": "Video ad production", "done": true },
+        { "label": "Landing page live", "done": true },
+        { "label": "B2B outreach campaign", "done": false },
+        { "label": "Attorney pilot program", "done": false }
+      ],
+      "startDate": "2025-12-01",
+      "targetDate": "2026-05-31"
+    },
+    {
+      "id": "upwork-freelance",
+      "name": "Upwork Freelance Pipeline",
+      "description": "AI engineering contracts at $80–120/hr — profile optimization, proposal pipeline, client acquisition",
+      "status": "active",
+      "priority": "medium",
+      "category": "Revenue",
+      "tech": ["AI Engineering", "Claude", "LangGraph", "GCP"],
+      "progress": 25,
+      "milestones": [
+        { "label": "Profile optimized", "done": true },
+        { "label": "First contract landed", "done": false },
+        { "label": "3 active clients", "done": false }
+      ],
+      "startDate": "2026-01-15",
+      "targetDate": "2026-06-30"
+    },
+    {
+      "id": "gen-ai-ohio",
+      "name": "Generative AI Ohio",
+      "description": "Community and brand for Ohio-based AI education, meetups, and consulting",
+      "status": "paused",
+      "priority": "low",
+      "category": "Community",
+      "tech": ["Community", "Content", "Events"],
+      "progress": 15,
+      "milestones": [
+        { "label": "Brand & social presence", "done": true },
+        { "label": "First meetup hosted", "done": false },
+        { "label": "Newsletter launched", "done": false }
+      ],
+      "startDate": "2025-09-01",
+      "targetDate": "2026-12-31"
+    },
+    {
+      "id": "notion-workspace",
+      "name": "Notion Persistent Memory System",
+      "description": "Structured workspace with AI Vault, Project Hub, Task List, Resources Vault, and Prompt Library",
+      "status": "active",
+      "priority": "medium",
+      "category": "Infrastructure",
+      "tech": ["Notion", "Notion API", "MCP"],
+      "progress": 70,
+      "milestones": [
+        { "label": "Core databases created", "done": true },
+        { "label": "AI Instructions page", "done": true },
+        { "label": "Daily journal workflow", "done": true },
+        { "label": "Full automation pipeline", "done": false }
+      ],
+      "startDate": "2025-08-01",
+      "targetDate": "2026-04-30"
+    }
+  ]
+}
