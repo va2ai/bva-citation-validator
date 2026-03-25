@@ -1,0 +1,11 @@
+{
+  "id": "004",
+  "name": "Fabricated BVA docket number",
+  "failure_mode": "fabricated_identifier",
+  "description": "When asked about BVA decisions broadly, an ungrounded model may fabricate plausible-looking BVA docket numbers that don't exist in any source. The validation layer catches these as NOT_IN_SOURCES.",
+  "query": "List all BVA decisions in the provided sources that granted service connection for PTSD. Include citation numbers and docket numbers for each.",
+  "expected_correct_citations": ["BVA 21-53274", "BVA 23-09881"],
+  "known_bad_citations": [],
+  "expected_verified": ["BVA 21-53274", "BVA 23-09881"],
+  "fix_applied": "post_generation_validation"
+}
