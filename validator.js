@@ -13,6 +13,8 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { runCritic } from "./critic.js";
+import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
@@ -26,6 +28,12 @@ const RETRIEVAL_CONTEXT = [
   {
     source_id: "38 CFR § 4.130",
     tool: "bva_cfr_section",
+    metadata: {
+      effective_date: "2021-08-10",
+      status: "active",
+      superseded_by: null,
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: 38 CFR § 4.130]
 Schedule of ratings — Mental disorders.
 
@@ -47,6 +55,12 @@ Diagnostic codes: 9201-9440
   {
     source_id: "38 CFR § 4.125",
     tool: "bva_cfr_section",
+    metadata: {
+      effective_date: "2021-08-10",
+      status: "active",
+      superseded_by: null,
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: 38 CFR § 4.125]
 Diagnosis of mental disorders.
 
@@ -58,6 +72,12 @@ Diagnosis of mental disorders.
   {
     source_id: "38 CFR § 3.304(f)",
     tool: "bva_cfr_section",
+    metadata: {
+      effective_date: "2018-08-06",
+      status: "active",
+      superseded_by: null,
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: 38 CFR § 3.304(f)]
 Post-traumatic stress disorder.
 
@@ -71,6 +91,12 @@ For claims involving military sexual trauma (MST), evidence from sources other t
   {
     source_id: "BVA 21-53274",
     tool: "bva_search",
+    metadata: {
+      decision_date: "2021-09-14",
+      status: "active",
+      superseded_by: null,
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: BVA 21-53274]
 BOARD OF VETERANS' APPEALS
 Citation Nr: 21-53274
@@ -93,6 +119,12 @@ ORDER: Service connection for PTSD is granted.
   {
     source_id: "BVA 22-18467",
     tool: "bva_search",
+    metadata: {
+      decision_date: "2022-03-22",
+      status: "superseded",
+      superseded_by: "BVA 24-01234",
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: BVA 22-18467]
 BOARD OF VETERANS' APPEALS
 Citation Nr: 22-18467
@@ -114,6 +146,12 @@ ORDER: A 70 percent rating for PTSD is granted, subject to the laws and regulati
   {
     source_id: "BVA 23-09881",
     tool: "bva_search",
+    metadata: {
+      decision_date: "2023-02-10",
+      status: "active",
+      superseded_by: null,
+      last_verified: "2026-03-20",
+    },
     content: `[SOURCE_START: BVA 23-09881]
 BOARD OF VETERANS' APPEALS
 Citation Nr: 23-09881
@@ -198,6 +236,16 @@ function getSourceIds() {
     }
   }
   return ids;
+}
+
+function getSourceMetadata() {
+  const metadata = new Map();
+  for (const r of RETRIEVAL_CONTEXT) {
+    if (r.metadata) {
+      metadata.set(r.source_id, r.metadata);
+    }
+  }
+  return metadata;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,12 +336,15 @@ async function run() {
     process.argv.find((a) => !a.startsWith("-") && a !== process.argv[0] && a !== process.argv[1]) ||
     "What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.";
 
+  const session = createSession(query, ungounded ? "ungrounded" : "grounded", "claude-sonnet-4-6");
+
   console.log("═".repeat(80));
   console.log("  POST-GENERATION CITATION VALIDATOR");
   console.log("  BVA Legal Intelligence Platform");
   console.log("═".repeat(80));
   console.log();
   console.log(`Query: ${query}`);
+  console.log(`Session: ${session.id}`);
   if (ungounded) {
     console.log();
     console.log(
@@ -351,6 +402,11 @@ async function run() {
   console.log("└" + "─".repeat(78) + "┘");
   console.log();
 
+  logStep(session, "generation", {
+    model: generationResponse.model,
+    tokens: { input: generationResponse.usage.input_tokens, output: generationResponse.usage.output_tokens },
+  });
+
   // --- Step 2: Citation extraction (second LLM pass) ---
   console.log("─".repeat(80));
   console.log("STEP 2: Structured citation extraction (second LLM pass)");
@@ -405,6 +461,11 @@ async function run() {
   console.log(`  Extracted ${citations.length} citations from response`);
   console.log();
 
+  logStep(session, "extraction", {
+    count: citations.length,
+    tokens: { input: extractionResponse.usage.input_tokens, output: extractionResponse.usage.output_tokens },
+  });
+
   // --- Step 3: Cross-reference validation ---
   console.log("─".repeat(80));
   console.log("STEP 3: Cross-reference validation against source data");
@@ -412,6 +473,7 @@ async function run() {
   console.log();
 
   const knownIds = getSourceIds();
+  const sourceMetadata = getSourceMetadata();
   const results = [];
 
   for (const citation of citations) {
@@ -426,6 +488,7 @@ async function run() {
 
     // Check against sentinel-tagged source data
     let foundInSources = false;
+    let matchedSourceId = null;
     const normalize = (s) =>
       s
         .replace(/C\.?F\.?R\.?/gi, "CFR")
@@ -438,6 +501,13 @@ async function run() {
     for (const known of knownIds) {
       if (normalize(id).includes(normalize(known)) || normalize(known).includes(normalize(id))) {
         foundInSources = true;
+        // Find the matching source_id for metadata lookup
+        for (const r of RETRIEVAL_CONTEXT) {
+          if (r.source_id === known || r.content.includes(`[SOURCE_START: ${known}]`)) {
+            matchedSourceId = r.source_id;
+            break;
+          }
+        }
         break;
       }
     }
@@ -449,6 +519,12 @@ async function run() {
         for (const known of knownIds) {
           if (known.includes(numMatch[1])) {
             foundInSources = true;
+            for (const r of RETRIEVAL_CONTEXT) {
+              if (r.source_id.includes(numMatch[1])) {
+                matchedSourceId = r.source_id;
+                break;
+              }
+            }
             break;
           }
         }
@@ -456,8 +532,18 @@ async function run() {
     }
 
     if (foundInSources) {
-      result.status = "VERIFIED";
-      result.detail = "Citation found in sentinel-tagged source context";
+      // Check temporal validity via metadata
+      const meta = matchedSourceId ? sourceMetadata.get(matchedSourceId) : null;
+      if (meta && meta.status !== "active") {
+        result.status = "OUTDATED";
+        result.detail = `Citation found in sources but ${meta.status}`;
+        if (meta.superseded_by) {
+          result.detail += ` — superseded by ${meta.superseded_by}`;
+        }
+      } else {
+        result.status = "VERIFIED";
+        result.detail = "Citation found in sentinel-tagged source context";
+      }
     } else {
       result.status = "NOT_IN_SOURCES";
       result.detail =
@@ -488,13 +574,57 @@ async function run() {
     results.push(result);
   }
 
-  // --- Step 4: Report ---
+  logStep(session, "validation", {
+    total: results.length,
+    verified: results.filter((r) => r.status === "VERIFIED").length,
+    outdated: results.filter((r) => r.status === "OUTDATED").length,
+    not_in_sources: results.filter((r) => r.status === "NOT_IN_SOURCES").length,
+    hallucinated: results.filter((r) => r.status === "HALLUCINATED").length,
+    ungrounded: results.filter((r) => r.status === "UNGROUNDED").length,
+  });
+
+  // --- Step 4: Adversarial critic review ---
+  console.log("─".repeat(80));
+  console.log("STEP 4: Adversarial critic review (third LLM pass)");
+  console.log("─".repeat(80));
+  console.log();
+
+  const criticResult = await runCritic(contextBlock, responseText, results, client);
+
+  if (criticResult.findings.length === 0) {
+    console.log("  No issues found — critic confirms response quality.");
+  } else {
+    for (const f of criticResult.findings) {
+      const sev =
+        f.severity === "high" ? "  HIGH" : f.severity === "medium" ? "  MED " : "  LOW ";
+      console.log(`${sev}  ${f.issue}`);
+      console.log(`        Sentence: "${f.sentence}"`);
+      console.log(`        Suggestion: ${f.suggestion}`);
+      console.log();
+    }
+  }
+
+  console.log(
+    `  Critic tokens: ${criticResult.usage.input_tokens} in / ${criticResult.usage.output_tokens} out`
+  );
+  console.log();
+
+  logStep(session, "critic", {
+    findings: criticResult.findings.length,
+    high: criticResult.findings.filter((f) => f.severity === "high").length,
+    medium: criticResult.findings.filter((f) => f.severity === "medium").length,
+    low: criticResult.findings.filter((f) => f.severity === "low").length,
+    tokens: criticResult.usage,
+  });
+
+  // --- Step 5: Report ---
   console.log("─".repeat(80));
   console.log("VALIDATION REPORT");
   console.log("─".repeat(80));
   console.log();
 
   const verified = results.filter((r) => r.status === "VERIFIED");
+  const outdated = results.filter((r) => r.status === "OUTDATED");
   const ungrounded = results.filter((r) => r.status === "UNGROUNDED");
   const notInSources = results.filter((r) => r.status === "NOT_IN_SOURCES");
   const hallucinated = results.filter((r) => r.status === "HALLUCINATED");
@@ -503,11 +633,13 @@ async function run() {
     const icon =
       r.status === "VERIFIED"
         ? "  PASS"
-        : r.status === "HALLUCINATED"
-          ? "  FAIL"
-          : r.status === "UNGROUNDED"
-            ? "  LEAK"
-            : "  WARN";
+        : r.status === "OUTDATED"
+          ? "  STALE"
+          : r.status === "HALLUCINATED"
+            ? "  FAIL"
+            : r.status === "UNGROUNDED"
+              ? "  LEAK"
+              : "  WARN";
     console.log(`${icon}  [${r.type.toUpperCase()}] ${r.identifier}`);
     console.log(`        Claim: ${r.claim}`);
     console.log(`        ${r.detail}`);
@@ -522,6 +654,9 @@ async function run() {
   console.log("═".repeat(80));
   console.log(`  Total citations extracted:  ${results.length}`);
   console.log(`  Verified (source + API):    ${verified.length}`);
+  if (outdated.length > 0) {
+    console.log(`  Outdated (superseded):      ${outdated.length}  <- source no longer current`);
+  }
   if (ungrounded.length > 0) {
     console.log(`  Ungrounded (real but leaked):${ungrounded.length}  <- model used training knowledge`);
   }
@@ -531,7 +666,7 @@ async function run() {
   }
   console.log();
 
-  if (notInSources.length > 0 || hallucinated.length > 0 || ungrounded.length > 0) {
+  if (notInSources.length > 0 || hallucinated.length > 0 || ungrounded.length > 0 || outdated.length > 0) {
     console.log(
       "  ACTION: Response contains citations not grounded in retrieved sources."
     );
@@ -551,6 +686,28 @@ async function run() {
   console.log(
     `  Extraction tokens: ${extractionResponse.usage.input_tokens} in / ${extractionResponse.usage.output_tokens} out`
   );
+  console.log(
+    `  Critic tokens:     ${criticResult.usage.input_tokens} in / ${criticResult.usage.output_tokens} out`
+  );
+  console.log();
+
+  // Finalize session log
+  session.citations = {
+    total: results.length,
+    verified: verified.length,
+    outdated: outdated.length,
+    ungrounded: ungrounded.length,
+    not_in_sources: notInSources.length,
+    hallucinated: hallucinated.length,
+  };
+  session.critic = {
+    findings: criticResult.findings.length,
+    high: criticResult.findings.filter((f) => f.severity === "high").length,
+    medium: criticResult.findings.filter((f) => f.severity === "medium").length,
+    low: criticResult.findings.filter((f) => f.severity === "low").length,
+  };
+  await finalizeSession(session);
+  console.log(`  Session logged: ${session.id}`);
   console.log();
 }
 

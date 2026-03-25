@@ -1,0 +1,11 @@
+{
+  "id": "001",
+  "name": "Context boundary confusion between § 4.130 and § 4.125",
+  "failure_mode": "context_boundary",
+  "description": "Without sentinel tags, the model misattributes the DSM-5 diagnostic conformance requirement from § 4.125 to the adjacent § 4.130. Sentinel tags fix this by giving the model unambiguous anchoring.",
+  "query": "Which specific CFR section contains the DSM-5 diagnostic conformance requirement — the one about returning reports to the examiner?",
+  "expected_correct_citations": ["38 CFR § 4.125"],
+  "known_bad_citations": [],
+  "expected_verified": ["38 CFR § 4.125"],
+  "fix_applied": "sentinel_tags"
+}
