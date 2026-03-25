@@ -883,6 +883,10 @@ async function runOptimize(resume) {
 
         if (msg.type === 'iteration') {
           iterations.push(msg.data);
+          // Update grounded prompt textarea when optimizer finds an improvement
+          if (msg.data.improved && msg.data.prompt) {
+            document.getElementById('groundedPrompt').value = msg.data.prompt;
+          }
           renderOptimizeProgress(iterations);
         } else if (msg.type === 'result') {
           finalResult = msg.data;
