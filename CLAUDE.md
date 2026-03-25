@@ -32,7 +32,7 @@ npm run test:regression      # frozen failure regression cases (tests/regression
 ```
 
 **Required env:** `ANTHROPIC_API_KEY` (loaded from `.env` via dotenv)
-**Optional env:** `BVA_API_URL` (live citation verification API), `PORT` (default 4000)
+**Optional env:** `GOOGLE_API_KEY` or `GEMINI_API_KEY` (for Gemini models), `BVA_API_URL` (live citation verification API), `PORT` (default 4000)
 
 ## Architecture
 
@@ -67,6 +67,7 @@ npm run test:regression      # frozen failure regression cases (tests/regression
 - **`lib/extract.js`** — extractCitations() via structured output schema
 - **`lib/prompt-advisor.js`** — suggestPromptUpdates() with history-aware optimization
 - **`lib/prompt-loop.js`** — computeScore(), checkConvergence(), runPromptLoop() (autoresearch pattern)
+- **`lib/providers.js`** — Multi-provider LLM abstraction: unified `generate()` for Anthropic + Gemini models, `getProviderInfo()`, `MODEL_LIST`
 - **`lib/logger.js`** — Session logging: createSession(), logStep(), finalizeSession()
 - **`critic.js`** — Adversarial critic: runCritic() returns findings with severity levels
 - **`validator.js`** — CLI entry point: `run()` for single validation, `optimize()` for recursive loop
@@ -80,6 +81,6 @@ npm run test:regression      # frozen failure regression cases (tests/regression
 - **Shared modules in lib/** — Context, validation, extraction, and prompts are defined once and imported everywhere
 - **Citation normalization** — `normalize()` handles C.F.R./CFR, U.S.C./USC, § variants, whitespace; bidirectional substring matching with docket number fallback
 - **Structured output** — All LLM extraction/critic/advisor calls use `output_config` with JSON schema + `additionalProperties: false`
-- **No build step** — Pure Node.js ES modules, dependencies: `@anthropic-ai/sdk`, `dotenv`
-- **Models** — Generation uses Sonnet 4.6 by default (configurable); extraction, critic, and advisor use Haiku 4.5 for cost
+- **No build step** — Pure Node.js ES modules, dependencies: `@anthropic-ai/sdk`, `@google/generative-ai`, `dotenv`
+- **Multi-provider** — `lib/providers.js` abstracts Anthropic and Google models behind a unified `generate()` API; generation model is configurable in the GUI; extraction, critic, and advisor use Haiku 4.5 for cost
 - **Tests hit the Anthropic API** — All tests require a live API key; no mocking
