@@ -14,6 +14,7 @@
     "validate:ungrounded": "node validator.js --ungrounded"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^17.3.1"
   }
 }

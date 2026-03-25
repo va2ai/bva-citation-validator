@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 /**
  * Web GUI for the Post-Generation Citation Validator.
  * Usage: ANTHROPIC_API_KEY=sk-... node server.js

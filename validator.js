@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 /**
  * Post-Generation Citation Validator
  *
