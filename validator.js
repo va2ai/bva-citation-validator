@@ -19,6 +19,7 @@ import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
+import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
 
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
@@ -168,7 +169,52 @@ async function run() {
     tokens: criticResult.usage,
   });
 
-  // --- Step 5: Report ---
+  // --- Step 5: Prompt advisor (suggest system prompt improvements) ---
+  const hasIssues = criticResult.findings.length > 0 ||
+    results.some((r) => r.status !== "VERIFIED");
+
+  if (hasIssues) {
+    console.log("─".repeat(80));
+    console.log("STEP 5: Prompt advisor — suggested system prompt improvements");
+    console.log("─".repeat(80));
+    console.log();
+
+    const advice = await suggestPromptUpdates(systemPrompt, criticResult.findings, results, client);
+
+    if (advice.suggestions.length === 0) {
+      console.log("  No prompt improvements suggested.");
+    } else {
+      for (const s of advice.suggestions) {
+        const pri = s.priority === "high" ? "  HIGH" : s.priority === "medium" ? "  MED " : "  LOW ";
+        console.log(`${pri}  ${s.rule}`);
+        console.log(`        Rationale: ${s.rationale}`);
+        console.log(`        Addresses: ${s.addresses.join(", ")}`);
+        console.log();
+      }
+      console.log("  SUGGESTED UPDATED PROMPT:");
+      console.log("┌" + "─".repeat(78) + "┐");
+      for (const line of advice.updated_prompt.split("\n")) {
+        const chunks = line.match(/.{1,76}/g) || [""];
+        for (const chunk of chunks) {
+          console.log(`│ ${chunk.padEnd(76)} │`);
+        }
+      }
+      console.log("└" + "─".repeat(78) + "┘");
+    }
+
+    console.log();
+    console.log(
+      `  Advisor tokens: ${advice.usage.input_tokens} in / ${advice.usage.output_tokens} out`
+    );
+    console.log();
+
+    logStep(session, "prompt_advisor", {
+      suggestions: advice.suggestions.length,
+      tokens: advice.usage,
+    });
+  }
+
+  // --- Step 6: Report ---
   console.log("─".repeat(80));
   console.log("VALIDATION REPORT");
   console.log("─".repeat(80));

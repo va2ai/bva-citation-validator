@@ -16,6 +16,7 @@ import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
+import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
@@ -77,6 +78,22 @@ async function runValidation(query, grounded, model, customPrompt) {
       tokens: criticResult.usage,
     },
   });
+
+  // Step 5: Prompt advisor
+  const hasIssues = criticResult.findings.length > 0 ||
+    results.some((r) => r.status !== "VERIFIED");
+
+  if (hasIssues) {
+    const advice = await suggestPromptUpdates(sysPrompt, criticResult.findings, results, client);
+    steps.push({
+      step: "prompt_advisor",
+      data: {
+        suggestions: advice.suggestions,
+        updated_prompt: advice.updated_prompt,
+        tokens: advice.usage,
+      },
+    });
+  }
 
   const verified = results.filter((r) => r.status === "VERIFIED").length;
   const outdated = results.filter((r) => r.status === "OUTDATED").length;

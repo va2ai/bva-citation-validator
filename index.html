@@ -305,6 +305,47 @@
   .critic-sentence { color: var(--text2); font-size: 11px; font-style: italic; margin-bottom: 4px; }
   .critic-suggestion { color: var(--text2); font-size: 10px; opacity: 0.7; }
 
+  /* Prompt advisor */
+  .advisor-suggestion {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    border-left: 3px solid var(--border);
+    font-size: 12px;
+  }
+  .advisor-suggestion.priority-high { border-left-color: var(--red); }
+  .advisor-suggestion.priority-medium { border-left-color: var(--amber); }
+  .advisor-suggestion.priority-low { border-left-color: var(--accent); }
+  .advisor-rule { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .advisor-rationale { color: var(--text2); font-size: 11px; margin-bottom: 4px; }
+  .advisor-addresses { color: var(--text2); font-size: 10px; opacity: 0.7; }
+  .updated-prompt {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text);
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    margin-top: 8px;
+    border: 1px solid rgba(59,130,246,0.2);
+  }
+  .copy-btn {
+    font-size: 10px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 6px;
+  }
+  .copy-btn:hover { background: var(--border); color: var(--text); }
+
   /* Spinner */
   .spinner {
     display: inline-block;
@@ -416,6 +457,7 @@ function renderPanel(data, mode) {
   const ext = data.find(s => s.step === 'extraction')?.data;
   const val = data.find(s => s.step === 'validation')?.data;
   const cri = data.find(s => s.step === 'critic')?.data;
+  const adv = data.find(s => s.step === 'prompt_advisor')?.data;
   const sum = data.find(s => s.step === 'summary')?.data;
 
   return `
@@ -474,8 +516,32 @@ function renderPanel(data, mode) {
         <div class="token-info">${cri?.tokens?.input_tokens || 0} tokens in / ${cri?.tokens?.output_tokens || 0} out</div>
       </div>
 
+      ${adv ? `
       <div class="step">
-        <div class="step-label"><span class="step-num">6</span> Summary</div>
+        <div class="step-label"><span class="step-num">6</span> Prompt advisor &mdash; ${adv.suggestions?.length || 0} suggestions</div>
+        ${(adv.suggestions || []).length === 0
+          ? '<div style="font-size:12px;color:var(--green);padding:8px 0;">No prompt improvements needed.</div>'
+          : (adv.suggestions || []).map(s => `
+          <div class="advisor-suggestion priority-${s.priority}">
+            <div class="advisor-rule">
+              <span class="severity-label ${s.priority}">${(s.priority||'').toUpperCase()}</span>
+              ${escapeHtml(s.rule)}
+            </div>
+            <div class="advisor-rationale">${escapeHtml(s.rationale)}</div>
+            <div class="advisor-addresses">Addresses: ${(s.addresses||[]).map(a => escapeHtml(a)).join(', ')}</div>
+          </div>
+        `).join('')}
+        ${adv.updated_prompt ? `
+          <div style="margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Suggested updated prompt:</div>
+          <div class="updated-prompt">${escapeHtml(adv.updated_prompt)}</div>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(adv.updated_prompt).replace(/'/g,'\\\'')}).then(()=>this.textContent='Copied!').catch(()=>this.textContent='Copy failed')">Copy to clipboard</button>
+        ` : ''}
+        <div class="token-info">${adv.tokens?.input_tokens || 0} tokens in / ${adv.tokens?.output_tokens || 0} out</div>
+      </div>
+      ` : ''}
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">${adv ? '7' : '6'}</span> Summary</div>
         <div class="summary">
           <div class="summary-stat">
             <div class="num num-total">${sum?.total || 0}</div>
