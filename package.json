@@ -11,7 +11,8 @@
     "test:fixes": "node fixes.js",
     "test:regression": "node tests/regression/runner.js",
     "test": "npm run test:fixes && npm run test:regression",
-    "validate:ungrounded": "node validator.js --ungrounded"
+    "validate:ungrounded": "node validator.js --ungrounded",
+    "optimize": "node validator.js --optimize"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

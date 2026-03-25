@@ -14,9 +14,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { runCritic } from "./critic.js";
 import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
-import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, buildContext } from "./lib/context.js";
+import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
+import { runPromptLoop } from "./lib/prompt-loop.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
@@ -143,6 +144,41 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/optimize") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const { prompt, maxIterations, model } = JSON.parse(body);
+      // Stream iteration progress as newline-delimited JSON
+      res.writeHead(200, {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache",
+      });
+
+      const result = await runPromptLoop({
+        initialPrompt: prompt || GROUNDED_PROMPT,
+        queries: TEST_QUERIES,
+        client,
+        model,
+        apiUrl: BVA_API,
+        maxIterations: maxIterations || 10,
+        onIteration: (iter) => {
+          res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
+        },
+      });
+
+      res.write(JSON.stringify({ type: "result", data: result }) + "\n");
+      res.end();
+    } catch (err) {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+      }
+      res.end(JSON.stringify({ type: "error", error: err.message }) + "\n");
     }
     return;
   }

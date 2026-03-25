@@ -17,9 +17,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { runCritic } from "./critic.js";
 import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
-import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, buildContext } from "./lib/context.js";
+import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
+import { runPromptLoop } from "./lib/prompt-loop.js";
 
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
@@ -308,7 +309,81 @@ async function run() {
   console.log();
 }
 
-run().catch((err) => {
-  console.error("Fatal error:", err.message);
-  process.exit(1);
-});
+// ---------------------------------------------------------------------------
+// Optimize mode: recursive prompt self-improvement loop
+// ---------------------------------------------------------------------------
+
+async function optimize() {
+  const maxIterations = parseInt(process.argv.find((a) => a.startsWith("--max="))?.split("=")[1] || "10", 10);
+
+  console.log("═".repeat(80));
+  console.log("  RECURSIVE PROMPT OPTIMIZER (Autoresearch Pattern)");
+  console.log("  BVA Legal Intelligence Platform");
+  console.log("═".repeat(80));
+  console.log();
+  console.log(`  Max iterations: ${maxIterations}`);
+  console.log(`  Test queries: ${TEST_QUERIES.length}`);
+  console.log(`  Starting prompt length: ${GROUNDED_PROMPT.length} chars`);
+  console.log();
+
+  const result = await runPromptLoop({
+    initialPrompt: GROUNDED_PROMPT,
+    queries: TEST_QUERIES,
+    client,
+    apiUrl: BVA_API,
+    maxIterations,
+    onIteration: (iter) => {
+      const delta = iter.iteration > 0
+        ? ` (${iter.improved ? "+" : ""}${(iter.score - (result?.history?.[iter.iteration - 1]?.score ?? iter.score)).toFixed(2)})`
+        : "";
+      console.log(
+        `  Iteration ${iter.iteration}: score=${iter.score}${delta} | ` +
+        `citations=${iter.totalCitations} findings=${iter.totalFindings} ` +
+        `${iter.improved ? "KEPT" : "REVERTED"}`
+      );
+      if (iter.convergedReason) {
+        console.log(`  -> Converged: ${iter.convergedReason}`);
+      }
+    },
+  });
+
+  console.log();
+  console.log("═".repeat(80));
+  console.log("  OPTIMIZATION RESULTS");
+  console.log("═".repeat(80));
+  console.log(`  Iterations:    ${result.totalIterations}`);
+  console.log(`  Initial score: ${result.initialScore}`);
+  console.log(`  Best score:    ${result.bestScore}`);
+  console.log(`  Improvement:   ${(result.bestScore - result.initialScore).toFixed(2)} points`);
+  console.log();
+  console.log("  OPTIMIZED PROMPT:");
+  console.log("┌" + "─".repeat(78) + "┐");
+  for (const line of result.bestPrompt.split("\n")) {
+    const chunks = line.match(/.{1,76}/g) || [""];
+    for (const chunk of chunks) {
+      console.log(`│ ${chunk.padEnd(76)} │`);
+    }
+  }
+  console.log("└" + "─".repeat(78) + "┘");
+  console.log();
+
+  // Show iteration history
+  console.log("  ITERATION HISTORY:");
+  for (const h of result.history) {
+    const marker = h.improved ? " *" : "  ";
+    console.log(`${marker} [${h.iteration}] score=${h.score} ${h.convergedReason ? `(${h.convergedReason})` : ""}`);
+  }
+  console.log();
+}
+
+if (process.argv.includes("--optimize")) {
+  optimize().catch((err) => {
+    console.error("Fatal error:", err.message);
+    process.exit(1);
+  });
+} else {
+  run().catch((err) => {
+    console.error("Fatal error:", err.message);
+    process.exit(1);
+  });
+}

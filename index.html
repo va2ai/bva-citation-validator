@@ -346,6 +346,65 @@
   }
   .copy-btn:hover { background: var(--border); color: var(--text); }
 
+  /* Optimize UI */
+  .optimize-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 20px;
+  }
+  .optimize-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(59,130,246,0.05), rgba(167,139,250,0.05));
+  }
+  .optimize-header h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+  }
+  .optimize-body { padding: 16px 20px; }
+  .iter-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    background: var(--bg);
+    font-size: 12px;
+  }
+  .iter-row.improved { border-left: 3px solid var(--green); }
+  .iter-row.reverted { border-left: 3px solid var(--amber); opacity: 0.7; }
+  .iter-row.converged { border-left: 3px solid var(--accent); }
+  .iter-num { font-weight: 700; color: var(--text2); min-width: 20px; }
+  .iter-score { font-weight: 700; min-width: 60px; }
+  .iter-delta { font-size: 11px; min-width: 50px; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--red); }
+  .delta-same { color: var(--text2); }
+  .iter-stats { color: var(--text2); font-size: 11px; }
+  .iter-status { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+  .status-kept { color: var(--green); }
+  .status-reverted { color: var(--amber); }
+  .optimize-result {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--bg);
+    border-radius: 4px;
+    border: 1px solid rgba(59,130,246,0.2);
+  }
+  .score-comparison {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 12px;
+  }
+  .score-box { text-align: center; }
+  .score-box .num { font-size: 32px; font-weight: 700; }
+  .score-box .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); }
+
   /* Spinner */
   .spinner {
     display: inline-block;
@@ -404,6 +463,7 @@
       <button class="btn btn-grounded" onclick="runSingle(true)">Run Grounded</button>
       <button class="btn btn-ungrounded" onclick="runSingle(false)">Run Ungrounded</button>
       <button class="btn btn-both" onclick="runBoth()">Compare Both</button>
+      <button class="btn" style="background:rgba(167,139,250,0.1);color:var(--purple);border-color:rgba(167,139,250,0.3);" onclick="runOptimize()">Optimize Prompt</button>
       <select id="model" style="margin-left:auto;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:8px 12px;border-radius:4px;cursor:pointer;">
         <option value="claude-sonnet-4-6">Sonnet 4.6 (recommended)</option>
         <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast/cheap)</option>
@@ -642,6 +702,130 @@ async function runBoth() {
     resultsEl.innerHTML = `<div class="results-grid single"><div class="result-panel"><div class="loading-msg" style="color:var(--red)">Error: ${escapeHtml(err.message)}</div></div></div>`;
   }
   setLoading(false);
+}
+
+async function runOptimize() {
+  setLoading(true);
+  const prompt = document.getElementById('groundedPrompt').value;
+  const model = document.getElementById('model').value;
+  const maxIterations = 10;
+
+  resultsEl.innerHTML = `
+    <div class="optimize-panel">
+      <div class="optimize-header"><h2>Recursive Prompt Optimization (Autoresearch Pattern)</h2></div>
+      <div class="optimize-body">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">
+          Running up to ${maxIterations} iterations across 4 test queries...
+        </div>
+        <div id="optimize-iterations">
+          <div class="loading-msg"><span class="spinner"></span>Starting iteration 0...</div>
+        </div>
+        <div id="optimize-result"></div>
+      </div>
+    </div>`;
+
+  try {
+    const res = await fetch('/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, maxIterations, model }),
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const iterations = [];
+    let finalResult = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+
+        if (msg.type === 'iteration') {
+          iterations.push(msg.data);
+          renderOptimizeProgress(iterations);
+        } else if (msg.type === 'result') {
+          finalResult = msg.data;
+        } else if (msg.type === 'error') {
+          throw new Error(msg.error);
+        }
+      }
+    }
+
+    if (finalResult) {
+      renderOptimizeResult(finalResult, iterations);
+    }
+  } catch (err) {
+    document.getElementById('optimize-result').innerHTML =
+      `<div style="color:var(--red);padding:12px;">Error: ${escapeHtml(err.message)}</div>`;
+  }
+  setLoading(false);
+}
+
+function renderOptimizeProgress(iterations) {
+  const el = document.getElementById('optimize-iterations');
+  let prevScore = null;
+  el.innerHTML = iterations.map((iter) => {
+    const delta = prevScore !== null ? iter.score - prevScore : 0;
+    const deltaStr = prevScore !== null
+      ? (delta > 0 ? `+${delta.toFixed(1)}` : delta < 0 ? delta.toFixed(1) : '±0')
+      : '—';
+    const deltaClass = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-same';
+    const rowClass = iter.convergedReason ? 'converged' : iter.improved ? 'improved' : 'reverted';
+    prevScore = iter.score;
+    return `
+      <div class="iter-row ${rowClass}">
+        <span class="iter-num">#${iter.iteration}</span>
+        <span class="iter-score">${iter.score}</span>
+        <span class="iter-delta ${deltaClass}">${deltaStr}</span>
+        <span class="iter-stats">${iter.totalCitations} citations, ${iter.totalFindings} findings</span>
+        <span class="iter-status ${iter.improved ? 'status-kept' : 'status-reverted'}">${iter.improved ? 'KEPT' : 'REVERTED'}</span>
+        ${iter.convergedReason ? `<span style="font-size:10px;color:var(--accent);">${escapeHtml(iter.convergedReason)}</span>` : ''}
+      </div>`;
+  }).join('') + `<div class="loading-msg"><span class="spinner"></span>Running iteration ${iterations.length}...</div>`;
+}
+
+function renderOptimizeResult(result, iterations) {
+  const el = document.getElementById('optimize-iterations');
+  // Remove the loading spinner
+  const spinner = el.querySelector('.loading-msg');
+  if (spinner) spinner.remove();
+
+  const improvement = result.bestScore - result.initialScore;
+  const improvementColor = improvement > 0 ? 'var(--green)' : improvement < 0 ? 'var(--red)' : 'var(--text2)';
+
+  document.getElementById('optimize-result').innerHTML = `
+    <div class="optimize-result">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:12px;">Optimization Complete — ${result.totalIterations} iterations</div>
+      <div class="score-comparison">
+        <div class="score-box">
+          <div class="num" style="color:var(--text2)">${result.initialScore}</div>
+          <div class="label">Initial Score</div>
+        </div>
+        <div class="score-box">
+          <div class="num" style="color:var(--green)">${result.bestScore}</div>
+          <div class="label">Best Score</div>
+        </div>
+        <div class="score-box">
+          <div class="num" style="color:${improvementColor}">${improvement > 0 ? '+' : ''}${improvement.toFixed(1)}</div>
+          <div class="label">Improvement</div>
+        </div>
+      </div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:12px 0 6px;">Optimized Prompt:</div>
+      <div class="updated-prompt">${escapeHtml(result.bestPrompt)}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(JSON.stringify(result.bestPrompt))}).then(()=>this.textContent='Copied!').catch(()=>this.textContent='Copy failed')">Copy to Clipboard</button>
+        <button class="copy-btn" onclick="document.getElementById('groundedPrompt').value=${JSON.stringify(JSON.stringify(result.bestPrompt))};this.textContent='Applied!'">Apply to Grounded Prompt</button>
+      </div>
+    </div>`;
 }
 </script>
 </body>
