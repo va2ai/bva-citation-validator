@@ -824,6 +824,17 @@ async function checkResumeStatus() {
 }
 checkResumeStatus();
 
+// Load active prompts from server (includes optimized prompt if available)
+async function loadPrompts() {
+  try {
+    const res = await fetch('/prompts');
+    const { grounded, ungrounded } = await res.json();
+    if (grounded) document.getElementById('groundedPrompt').value = grounded;
+    if (ungrounded) document.getElementById('ungroundedPrompt').value = ungrounded;
+  } catch { /* ignore */ }
+}
+loadPrompts();
+
 async function runOptimize(resume) {
   setLoading(true);
   const prompt = document.getElementById('groundedPrompt').value;

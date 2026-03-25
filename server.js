@@ -182,6 +182,12 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/prompts") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ grounded: GROUNDED_PROMPT, ungrounded: UNGROUNDED_PROMPT }));
+    return;
+  }
+
   if (req.method === "GET" && req.url === "/optimize/status") {
     try {
       const state = await loadState();
