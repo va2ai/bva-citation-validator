@@ -413,6 +413,31 @@
     border-radius: 4px;
   }
   .score-chart svg { width: 100%; display: block; }
+  .ledger-box {
+    margin-top: 12px;
+    background: var(--bg);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .ledger-box summary {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .ledger-content {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text2);
+    padding: 0 12px 12px;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+  }
   .chart-label {
     font-size: 9px;
     text-transform: uppercase;
@@ -965,7 +990,12 @@ function renderOptimizeProgress(iterations) {
       </div>`;
   }).join('');
 
-  el.innerHTML = renderScoreChart(iterations) + rows +
+  const lastLedger = iterations[iterations.length - 1]?.ledger;
+  const ledgerHtml = lastLedger
+    ? `<details class="ledger-box" open><summary>Optimization Ledger</summary><div class="ledger-content">${escapeHtml(lastLedger)}</div></details>`
+    : '';
+
+  el.innerHTML = renderScoreChart(iterations) + rows + ledgerHtml +
     `<div class="loading-msg"><span class="spinner"></span>Running iteration ${iterations.length}...</div>`;
 }
 
@@ -996,7 +1026,12 @@ function renderOptimizeResult(result, iterations) {
         ${iter.convergedReason ? `<span style="font-size:10px;color:var(--accent);">${escapeHtml(iter.convergedReason)}</span>` : ''}
       </div>`;
   }).join('');
-  el2.innerHTML = renderScoreChart(iterations, 140) + finalRows + renderQueryBars(iterations);
+  const finalLedger = iterations[iterations.length - 1]?.ledger;
+  const finalLedgerHtml = finalLedger
+    ? `<details class="ledger-box"><summary>Optimization Ledger — what the AI learned</summary><div class="ledger-content">${escapeHtml(finalLedger)}</div></details>`
+    : '';
+
+  el2.innerHTML = renderScoreChart(iterations, 140) + finalRows + renderQueryBars(iterations) + finalLedgerHtml;
 
   const improvement = result.bestScore - result.initialScore;
   const improvementColor = improvement > 0 ? 'var(--green)' : improvement < 0 ? 'var(--red)' : 'var(--text2)';
