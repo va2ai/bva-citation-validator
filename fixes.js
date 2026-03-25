@@ -12,6 +12,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { extractCitations as extractCitationsStructured } from "./lib/extract.js";
 
 const client = new Anthropic();
 
@@ -109,12 +110,7 @@ RULES:
 - You may explain each entry but must not change the ranking or scores.
 - Do NOT add cases that are not in the pre-computed result.`;
 
-const EXTRACTION_PROMPT = `Extract every legal citation from this response. Return a JSON array:
-[{"type":"cfr"|"bva"|"cavc"|"usc","identifier":"exact string","claim":"what is claimed"}]
-Return ONLY valid JSON. No markdown fences.
-
-Response:
-`;
+// Extraction prompt removed — now handled by lib/extract.js via tool-use structured output
 
 // ---------------------------------------------------------------------------
 // Known source identifiers
@@ -144,17 +140,8 @@ function isKnown(id) {
 }
 
 async function extractCitations(text) {
-  const res = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    messages: [{ role: "user", content: EXTRACTION_PROMPT + text }],
-  });
-  let raw = res.content[0].text.trim().replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-  try { return JSON.parse(raw); } catch {
-    const lb = raw.lastIndexOf("}");
-    if (lb > 0) try { return JSON.parse(raw.slice(0, lb + 1) + "]"); } catch {}
-    return [];
-  }
+  const { citations } = await extractCitationsStructured(text, client);
+  return citations;
 }
 
 async function generate(system, context, query) {
