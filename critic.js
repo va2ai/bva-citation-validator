@@ -9,48 +9,44 @@
  * - Citations used in misleading context
  * - Temporal assumptions (assuming current validity without checking)
  *
- * Uses tool-use structured output to guarantee valid JSON responses.
+ * Uses the Claude API's structured responses feature (output_config) to
+ * guarantee valid JSON matching a defined schema.
  */
 
-const CRITIC_TOOL = {
-  name: "record_findings",
-  description:
-    "Record all issues found during the adversarial review of the AI-generated response. Call this tool exactly once with the complete list of findings. Use an empty array if no issues are found.",
-  input_schema: {
-    type: "object",
-    properties: {
-      findings: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            sentence: {
-              type: "string",
-              description:
-                "The problematic sentence from the response (quoted exactly)",
-            },
-            issue: {
-              type: "string",
-              description: "Description of the problem",
-            },
-            severity: {
-              type: "string",
-              enum: ["high", "medium", "low"],
-              description: "Severity level of the issue",
-            },
-            suggestion: {
-              type: "string",
-              description: "What should be done to fix it",
-            },
+const FINDINGS_SCHEMA = {
+  type: "object",
+  properties: {
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sentence: {
+            type: "string",
+            description:
+              "The problematic sentence from the response (quoted exactly)",
           },
-          required: ["sentence", "issue", "severity", "suggestion"],
+          issue: {
+            type: "string",
+            description: "Description of the problem",
+          },
+          severity: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+            description: "Severity level of the issue",
+          },
+          suggestion: {
+            type: "string",
+            description: "What should be done to fix it",
+          },
         },
-        description:
-          "Array of issues found. Empty array if no issues detected.",
+        required: ["sentence", "issue", "severity", "suggestion"],
       },
+      description:
+        "Array of issues found. Empty array if no issues detected.",
     },
-    required: ["findings"],
   },
+  required: ["findings"],
 };
 
 const CRITIC_PROMPT = `You are a legal citation auditor specializing in VA disability claims. Your job is to find problems that a simple citation-matching validator would MISS.
@@ -69,7 +65,7 @@ Look for:
 4. **Temporal assumptions** — response assumes a regulation or decision is current without noting potential staleness
 5. **Aggregation errors** — response combines data from multiple sources in ways that create new (unverified) claims
 
-Use the record_findings tool to return your findings.`;
+Return your findings as structured JSON. Use an empty findings array if no issues are found.`;
 
 /**
  * Run the adversarial critic pass.
@@ -91,8 +87,12 @@ export async function runCritic(sources, response, validationResults, client, mo
   const criticResponse = await client.messages.create({
     model: criticModel,
     max_tokens: 4096,
-    tools: [CRITIC_TOOL],
-    tool_choice: { type: "tool", name: "record_findings" },
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: FINDINGS_SCHEMA,
+      },
+    },
     messages: [
       {
         role: "user",
@@ -110,8 +110,7 @@ ${validationSummary}`,
     ],
   });
 
-  const toolUse = criticResponse.content.find((block) => block.type === "tool_use");
-  const findings = toolUse?.input?.findings || [];
+  const findings = JSON.parse(criticResponse.content[0].text).findings;
 
   return {
     findings,
