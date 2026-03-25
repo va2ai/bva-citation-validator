@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Citation Validator — BVA Legal Intelligence</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<div class="header">
+  <h1>Post-Generation Citation Validator <span class="badge">LIVE DEMO</span></h1>
+  <p>Hallucination detection pipeline for BVA Legal Intelligence Platform</p>
+</div>
+
+<div class="container">
+  <div class="query-panel">
+    <label>Query</label>
+    <select id="examples" onchange="document.getElementById('query').value=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text-muted);font-family:inherit;font-size:11px;padding:8px 12px;border-radius:4px;margin-bottom:8px;cursor:pointer;">
+      <option value="What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.">PTSD rating criteria + BVA decisions for MST/TBI service connection</option>
+      <option value="What is the General Rating Formula for Mental Disorders and how does it apply to a veteran rated at 50% for PTSD who now shows deficiencies in most areas?">Rating increase: 50% to 70% PTSD — what evidence is needed?</option>
+      <option value="Explain the evidentiary standard for military sexual trauma claims under 38 CFR § 3.304(f). What sources can corroborate an MST stressor besides service records?">MST evidentiary standard — what corroborating sources are accepted?</option>
+      <option value="Which BVA decisions in the provided sources granted service connection, and what was the legal basis for each? Compare the nexus evidence across cases.">Cross-case comparison — nexus evidence across all provided BVA decisions</option>
+      <option value="What diagnostic requirements must be met for a PTSD diagnosis to be accepted by VA, and what happens if the diagnosis doesn't conform to DSM-5?">DSM-5 diagnostic requirements for VA PTSD claims</option>
+      <option value="Can a veteran receive service connection for PTSD secondary to a TBI? What evidence did the Board rely on in BVA 23-09881?">Secondary service connection: PTSD from TBI — BVA 23-09881 analysis</option>
+    </select>
+    <textarea id="query">What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.</textarea>
+    <div class="btn-row">
+      <button class="btn btn-grounded" onclick="runSingle(true)">Run Grounded</button>
+      <button class="btn btn-ungrounded" onclick="runSingle(false)">Run Ungrounded</button>
+      <button class="btn btn-both" onclick="runBoth()">Compare Both</button>
+      <button class="btn" style="background:rgba(167,139,250,0.1);color:var(--purple);border-color:rgba(167,139,250,0.3);" onclick="runOptimize(false)">Optimize Prompt</button>
+      <button class="btn" id="resumeBtn" style="display:none;background:rgba(167,139,250,0.05);color:var(--purple);border-color:rgba(167,139,250,0.2);font-size:11px;" onclick="runOptimize(true)">Resume</button>
+      <input id="maxIter" type="number" value="10" min="1" max="50" style="width:45px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:8px 6px;border-radius:4px;text-align:center;" title="Max iterations">
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <label style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);">Query Model</label>
+          <select id="model" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:6px 8px;border-radius:4px;cursor:pointer;">
+            <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+            <option value="claude-opus-4-6">Opus 4.6</option>
+            <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <label style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--purple);">Optimizer Model</label>
+          <select id="optimizerModel" style="background:var(--bg);border:1px solid rgba(167,139,250,0.3);color:var(--purple);font-family:inherit;font-size:11px;padding:6px 8px;border-radius:4px;cursor:pointer;">
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (default)</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <details style="margin-top:16px;">
+      <summary style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);cursor:pointer;user-select:none;">System Prompts (click to view/edit)</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+        <div>
+          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">Grounded Prompt</label>
+          <textarea id="groundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. You answer questions from VA-accredited attorneys, VSOs, and claims agents using ONLY the source materials provided.
+
+GROUNDING RULES (MANDATORY):
+- Every 38 CFR citation, BVA docket number, BVA citation number, and CAVC case citation in your response MUST appear verbatim in the [SOURCE_START]...[SOURCE_END] blocks provided.
+- You may NOT construct, infer, or recall citations from prior knowledge.
+- You may NOT combine or interpolate citation identifiers.
+- If the provided sources are insufficient to fully answer the question, explicitly state what is missing rather than filling gaps from memory.
+- When referencing a specific regulation or decision, include the exact identifier from the source tag.
+
+FORMAT: Use the citation identifiers exactly as they appear in source tags. For CFR sections use "38 CFR § X.XXX" format. For BVA decisions use "BVA XX-XXXXX" format.</textarea>
+        </div>
+        <div>
+          <label style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:6px;">Ungrounded Prompt (deliberately weak)</label>
+          <textarea id="ungroundedPrompt" style="width:100%;height:180px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:11px;padding:10px;border-radius:4px;resize:vertical;line-height:1.5;">You are a VA disability claims research assistant. Answer the question thoroughly using the provided materials AND your own knowledge of VA law. Include as many specific BVA citation numbers, CFR sections, and CAVC case references as possible to make the answer authoritative. If you know of additional relevant cases or regulations beyond what is provided, include them.</textarea>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script src="/js/utils.js"></script>
+<script src="/js/render.js"></script>
+<script src="/js/optimize.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

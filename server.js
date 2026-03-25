@@ -130,11 +130,29 @@ async function runValidation(query, grounded, model, customPrompt) {
 // ---------------------------------------------------------------------------
 
 const server = createServer(async (req, res) => {
-  if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
-    const html = await readFile(join(__dirname, "index.html"), "utf-8");
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(html);
-    return;
+  // Static file serving from public/
+  if (req.method === "GET") {
+    const MIME = { ".html": "text/html", ".css": "text/css", ".js": "application/javascript" };
+    let filePath = null;
+
+    if (req.url === "/" || req.url === "/index.html") {
+      filePath = join(__dirname, "public", "index.html");
+    } else if (req.url.startsWith("/css/") || req.url.startsWith("/js/")) {
+      filePath = join(__dirname, "public", req.url);
+    }
+
+    if (filePath) {
+      try {
+        const content = await readFile(filePath, "utf-8");
+        const ext = filePath.slice(filePath.lastIndexOf("."));
+        res.writeHead(200, { "Content-Type": MIME[ext] || "text/plain" });
+        res.end(content);
+      } catch {
+        res.writeHead(404);
+        res.end("Not found");
+      }
+      return;
+    }
   }
 
   if (req.method === "POST" && req.url === "/validate") {
