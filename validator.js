@@ -315,18 +315,13 @@ async function run() {
 
 async function optimize() {
   const maxIterations = parseInt(process.argv.find((a) => a.startsWith("--max="))?.split("=")[1] || "10", 10);
-  const resumeMode = process.argv.includes("--resume");
+  const resumeArg = process.argv.find((a) => a.startsWith("--resume"));
+  const resumeJobId = resumeArg
+    ? (resumeArg.includes("=") ? resumeArg.split("=")[1] : "latest")
+    : null;
 
-  // Use latest optimized prompt as starting point if resuming
-  let startPrompt = GROUNDED_PROMPT;
-  if (resumeMode) {
-    const prev = await loadLatestPrompt();
-    if (prev) {
-      startPrompt = prev;
-      console.log("  Resuming from previous optimization (optimize/latest-prompt.txt)");
-    } else {
-      console.log("  No previous optimization found, starting fresh");
-    }
+  if (resumeJobId) {
+    console.log(`  Resuming job: ${resumeJobId}`);
   }
 
   console.log("═".repeat(80));
@@ -336,17 +331,17 @@ async function optimize() {
   console.log();
   console.log(`  Max iterations: ${maxIterations}`);
   console.log(`  Test queries: ${TEST_QUERIES.length}`);
-  console.log(`  Starting prompt length: ${startPrompt.length} chars`);
-  console.log(`  Resume: ${resumeMode}`);
+  console.log(`  Starting prompt length: ${GROUNDED_PROMPT.length} chars`);
+  if (resumeJobId) console.log(`  Resume: ${resumeJobId}`);
   console.log();
 
   const result = await runPromptLoop({
-    initialPrompt: startPrompt,
+    initialPrompt: GROUNDED_PROMPT,
     queries: TEST_QUERIES,
     client,
     apiUrl: BVA_API,
     maxIterations,
-    resume: resumeMode,
+    resumeJobId,
     onIteration: (iter) => {
       const delta = iter.iteration > 0
         ? ` (${iter.improved ? "+" : ""}${(iter.score - (result?.history?.[iter.iteration - 1]?.score ?? iter.score)).toFixed(2)})`
@@ -366,6 +361,7 @@ async function optimize() {
   console.log("═".repeat(80));
   console.log("  OPTIMIZATION RESULTS");
   console.log("═".repeat(80));
+  console.log(`  Job ID:        ${result.jobId}`);
   console.log(`  Iterations:    ${result.totalIterations}`);
   console.log(`  Initial score: ${result.initialScore}`);
   console.log(`  Best score:    ${result.bestScore}`);

@@ -17,7 +17,7 @@ import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
-import { runPromptLoop } from "./lib/prompt-loop.js";
+import { runPromptLoop, listJobs } from "./lib/prompt-loop.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
@@ -152,7 +152,7 @@ const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
-      const { prompt, maxIterations, model, resume } = JSON.parse(body);
+      const { prompt, maxIterations, model, resumeJobId } = JSON.parse(body);
       // Stream iteration progress as newline-delimited JSON
       res.writeHead(200, {
         "Content-Type": "application/x-ndjson",
@@ -167,7 +167,7 @@ const server = createServer(async (req, res) => {
         model,
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,
-        resume: !!resume,
+        resumeJobId: resumeJobId || undefined,
         onIteration: (iter) => {
           res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
         },
@@ -180,6 +180,18 @@ const server = createServer(async (req, res) => {
         res.writeHead(500, { "Content-Type": "application/json" });
       }
       res.end(JSON.stringify({ type: "error", error: err.message }) + "\n");
+    }
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/jobs") {
+    try {
+      const jobs = await listJobs();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(jobs));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
     }
     return;
   }
