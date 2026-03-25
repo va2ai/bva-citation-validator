@@ -17,6 +17,7 @@
     --red: #ef4444;
     --amber: #f59e0b;
     --purple: #a78bfa;
+    --orange: #f97316;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -221,6 +222,7 @@
   .citation.HALLUCINATED { border-left-color: var(--red); }
   .citation.UNGROUNDED { border-left-color: var(--purple); }
   .citation.NOT_IN_SOURCES { border-left-color: var(--amber); }
+  .citation.OUTDATED { border-left-color: var(--orange); }
 
   .citation-id {
     font-weight: 600;
@@ -243,6 +245,7 @@
   .status-HALLUCINATED { background: rgba(239,68,68,0.15); color: var(--red); }
   .status-UNGROUNDED { background: rgba(167,139,250,0.15); color: var(--purple); }
   .status-NOT_IN_SOURCES { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .status-OUTDATED { background: rgba(249,115,22,0.15); color: var(--orange); }
 
   /* Summary */
   .summary {
@@ -273,6 +276,34 @@
   .num-ungrounded { color: var(--purple); }
   .num-warn { color: var(--amber); }
   .num-total { color: var(--text); }
+  .num-outdated { color: var(--orange); }
+
+  /* Critic findings */
+  .critic-finding {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    border-left: 3px solid var(--border);
+    font-size: 12px;
+  }
+  .critic-finding.severity-high { border-left-color: var(--red); }
+  .critic-finding.severity-medium { border-left-color: var(--amber); }
+  .critic-finding.severity-low { border-left-color: var(--accent); }
+  .critic-finding .severity-label {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+  }
+  .severity-label.high { background: rgba(239,68,68,0.15); color: var(--red); }
+  .severity-label.medium { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .severity-label.low { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .critic-issue { color: var(--text); margin-bottom: 4px; }
+  .critic-sentence { color: var(--text2); font-size: 11px; font-style: italic; margin-bottom: 4px; }
+  .critic-suggestion { color: var(--text2); font-size: 10px; opacity: 0.7; }
 
   /* Spinner */
   .spinner {
@@ -384,6 +415,7 @@ function renderPanel(data, mode) {
   const gen = data.find(s => s.step === 'generation')?.data;
   const ext = data.find(s => s.step === 'extraction')?.data;
   const val = data.find(s => s.step === 'validation')?.data;
+  const cri = data.find(s => s.step === 'critic')?.data;
   const sum = data.find(s => s.step === 'summary')?.data;
 
   return `
@@ -426,7 +458,24 @@ function renderPanel(data, mode) {
       </div>
 
       <div class="step">
-        <div class="step-label"><span class="step-num">5</span> Summary</div>
+        <div class="step-label"><span class="step-num">5</span> Adversarial critic review &mdash; ${cri?.findings?.length || 0} findings</div>
+        ${(cri?.findings || []).length === 0
+          ? '<div style="font-size:12px;color:var(--green);padding:8px 0;">No issues found &mdash; critic confirms response quality.</div>'
+          : (cri?.findings || []).map(f => `
+          <div class="critic-finding severity-${f.severity}">
+            <div class="critic-issue">
+              <span class="severity-label ${f.severity}">${(f.severity||'').toUpperCase()}</span>
+              ${escapeHtml(f.issue)}
+            </div>
+            <div class="critic-sentence">"${escapeHtml(f.sentence || '')}"</div>
+            <div class="critic-suggestion">Suggestion: ${escapeHtml(f.suggestion || '')}</div>
+          </div>
+        `).join('')}
+        <div class="token-info">${cri?.tokens?.input_tokens || 0} tokens in / ${cri?.tokens?.output_tokens || 0} out</div>
+      </div>
+
+      <div class="step">
+        <div class="step-label"><span class="step-num">6</span> Summary</div>
         <div class="summary">
           <div class="summary-stat">
             <div class="num num-total">${sum?.total || 0}</div>
@@ -436,6 +485,11 @@ function renderPanel(data, mode) {
             <div class="num num-verified">${sum?.verified || 0}</div>
             <div class="label">Verified</div>
           </div>
+          ${(sum?.outdated || 0) > 0 ? `
+          <div class="summary-stat">
+            <div class="num num-outdated">${sum.outdated}</div>
+            <div class="label">Outdated</div>
+          </div>` : ''}
           <div class="summary-stat">
             <div class="num num-warn">${sum?.notInSources || 0}</div>
             <div class="label">Unverified</div>
@@ -450,6 +504,10 @@ function renderPanel(data, mode) {
             <div class="num num-hallucinated">${sum.hallucinated}</div>
             <div class="label">Hallucinated</div>
           </div>` : ''}
+          <div class="summary-stat">
+            <div class="num" style="color:${(cri?.findings?.length || 0) > 0 ? 'var(--amber)' : 'var(--green)'}">${cri?.findings?.length || 0}</div>
+            <div class="label">Critic Findings</div>
+          </div>
         </div>
       </div>
     </div>

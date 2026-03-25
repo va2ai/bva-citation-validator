@@ -1,0 +1,11 @@
+{
+  "id": "002",
+  "name": "Interpolated CAVC case citation",
+  "failure_mode": "interpolated_identifier",
+  "description": "Without grounding constraints, the model fabricates plausible-looking CAVC case citations from training knowledge (e.g., Clemons v. Shinseki). The grounding prompt forces the model to stay within provided sources or explicitly state what is missing.",
+  "query": "What CAVC cases establish precedent for PTSD service connection claims? Include specific case names and citation numbers.",
+  "expected_correct_citations": [],
+  "known_bad_citations": ["Clemons v. Shinseki"],
+  "expected_not_in_sources_types": ["cavc"],
+  "fix_applied": "grounding_constraint"
+}
