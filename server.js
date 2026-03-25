@@ -160,7 +160,7 @@ const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
-      const { prompt, maxIterations, model, resume } = JSON.parse(body);
+      const { prompt, maxIterations, model, optimizerModel, resume } = JSON.parse(body);
 
       // If already running, reject
       if (activeOptimization && !activeOptimization.done) {
@@ -181,6 +181,7 @@ const server = createServer(async (req, res) => {
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,
         resume: !!resume,
+        optimizerModel: optimizerModel || undefined,
         signal: abortController.signal,
         onIteration: (iter) => {
           opt.iterations.push(iter);
