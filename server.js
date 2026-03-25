@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { runCritic } from "./critic.js";
+import { extractCitations } from "./lib/extract.js";
 import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -185,15 +186,7 @@ FORMAT: Use the citation identifiers exactly as they appear in source tags. For 
 
 const UNGROUNDED_PROMPT = `You are a VA disability claims research assistant. Answer the question thoroughly using the provided materials AND your own knowledge of VA law. Include as many specific BVA citation numbers, CFR sections, and CAVC case references as possible to make the answer authoritative. If you know of additional relevant cases or regulations beyond what is provided, include them.`;
 
-const EXTRACTION_PROMPT = `Extract every legal citation from the following AI-generated response about VA disability claims. Return a JSON array where each element has:
-- "type": one of "cfr", "bva", "cavc", "usc"
-- "identifier": the exact citation string as it appears in the text
-- "claim": a one-sentence summary of what the response claims about this citation
-
-Return ONLY valid JSON. No markdown fences, no commentary.
-
-Response to extract from:
-`;
+// Extraction prompt removed — now handled by lib/extract.js via tool-use structured output
 
 // ---------------------------------------------------------------------------
 // Validation logic
@@ -301,40 +294,14 @@ async function runValidation(query, grounded, model, customPrompt) {
     },
   });
 
-  // Step 2: Extraction
-  const extResponse = await client.messages.create({
-    model: extModel,
-    max_tokens: 4096,
-    messages: [{ role: "user", content: EXTRACTION_PROMPT + responseText }],
-  });
-
-  let citations;
-  try {
-    let raw = extResponse.content[0].text.trim().replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-    citations = JSON.parse(raw);
-  } catch {
-    try {
-      let raw = extResponse.content[0].text.trim().replace(/^```json?\s*/i, "").replace(/\s*```$/i, "");
-      const lastBrace = raw.lastIndexOf("}");
-      citations = JSON.parse(raw.slice(0, lastBrace + 1) + "]");
-    } catch {
-      citations = [];
-    }
-  }
-
-  const seen = new Set();
-  citations = citations.filter((c) => {
-    const key = `${c.type}:${c.identifier}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // Step 2: Extraction (via tool-use structured output)
+  const { citations, usage: extUsage } = await extractCitations(responseText, client, extModel);
 
   steps.push({
     step: "extraction",
     data: {
       count: citations.length,
-      tokens: { input: extResponse.usage.input_tokens, output: extResponse.usage.output_tokens },
+      tokens: extUsage,
     },
   });
 
