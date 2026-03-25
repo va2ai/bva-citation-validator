@@ -24,6 +24,10 @@ const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
 const PORT = process.env.PORT || 4000;
 
+// Background optimization state
+let activeOptimization = null; // { done, iterations, result, error }
+const optimizeListeners = new Set(); // connected response streams
+
 const VALID_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5", "gemini-2.0-flash", "gemini-2.5-flash"];
 
 async function runValidation(query, grounded, model, customPrompt) {
@@ -148,18 +152,28 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // ---------------------------------------------------------------------------
+  // Background optimization — survives client disconnects
+  // ---------------------------------------------------------------------------
+
   if (req.method === "POST" && req.url === "/optimize") {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
       const { prompt, maxIterations, model, resume } = JSON.parse(body);
-      res.writeHead(200, {
-        "Content-Type": "application/x-ndjson",
-        "Transfer-Encoding": "chunked",
-        "Cache-Control": "no-cache",
-      });
 
-      const result = await runPromptLoop({
+      // If already running, reject
+      if (activeOptimization && !activeOptimization.done) {
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Optimization already in progress" }));
+        return;
+      }
+
+      // Start optimization in background
+      activeOptimization = { done: false, iterations: [], result: null, error: null };
+      const opt = activeOptimization;
+
+      runPromptLoop({
         initialPrompt: prompt || GROUNDED_PROMPT,
         queries: TEST_QUERIES,
         model,
@@ -167,18 +181,73 @@ const server = createServer(async (req, res) => {
         maxIterations: maxIterations || 10,
         resume: !!resume,
         onIteration: (iter) => {
-          res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
+          opt.iterations.push(iter);
+          // Stream to all connected listeners
+          for (const listener of optimizeListeners) {
+            try { listener.write(JSON.stringify({ type: "iteration", data: iter }) + "\n"); }
+            catch { /* disconnected */ }
+          }
         },
+      }).then((result) => {
+        opt.result = result;
+        opt.done = true;
+        for (const listener of optimizeListeners) {
+          try {
+            listener.write(JSON.stringify({ type: "result", data: result }) + "\n");
+            listener.end();
+          } catch { /* disconnected */ }
+        }
+        optimizeListeners.clear();
+      }).catch((err) => {
+        opt.error = err.message;
+        opt.done = true;
+        for (const listener of optimizeListeners) {
+          try {
+            listener.write(JSON.stringify({ type: "error", error: err.message }) + "\n");
+            listener.end();
+          } catch { /* disconnected */ }
+        }
+        optimizeListeners.clear();
       });
 
-      res.write(JSON.stringify({ type: "result", data: result }) + "\n");
-      res.end();
+      // Attach this response as a listener
+      res.writeHead(200, {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache",
+      });
+      optimizeListeners.add(res);
+      req.on("close", () => optimizeListeners.delete(res));
+
     } catch (err) {
-      if (!res.headersSent) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-      }
-      res.end(JSON.stringify({ type: "error", error: err.message }) + "\n");
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
     }
+    return;
+  }
+
+  // Reconnect to in-progress optimization stream
+  if (req.method === "GET" && req.url === "/optimize/stream") {
+    if (!activeOptimization || activeOptimization.done) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ type: "none" }));
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "application/x-ndjson",
+      "Transfer-Encoding": "chunked",
+      "Cache-Control": "no-cache",
+    });
+
+    // Replay past iterations
+    for (const iter of activeOptimization.iterations) {
+      res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
+    }
+
+    // Subscribe to future updates
+    optimizeListeners.add(res);
+    req.on("close", () => optimizeListeners.delete(res));
     return;
   }
 

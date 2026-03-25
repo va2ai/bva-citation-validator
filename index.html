@@ -835,6 +835,64 @@ async function loadPrompts() {
 }
 loadPrompts();
 
+// Check for in-progress optimization and reconnect
+async function checkInProgress() {
+  try {
+    const res = await fetch('/optimize/stream');
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('ndjson')) {
+      // No active optimization
+      return;
+    }
+
+    // There's an active optimization — show the UI and stream
+    setLoading(true);
+    resultsEl.innerHTML = `
+      <div class="optimize-panel">
+        <div class="optimize-header"><h2>Recursive Prompt Optimization (Autoresearch Pattern)</h2></div>
+        <div class="optimize-body">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Reconnected to in-progress optimization...</div>
+          <div id="optimize-iterations"></div>
+          <div id="optimize-result"></div>
+        </div>
+      </div>`;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const iterations = [];
+    let finalResult = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'iteration') {
+          iterations.push(msg.data);
+          if (msg.data.improved && msg.data.prompt) {
+            document.getElementById('groundedPrompt').value = msg.data.prompt;
+          }
+          renderOptimizeProgress(iterations);
+        } else if (msg.type === 'result') {
+          finalResult = msg.data;
+        }
+      }
+    }
+
+    if (finalResult) {
+      renderOptimizeResult(finalResult, iterations);
+      checkResumeStatus();
+    }
+    setLoading(false);
+  } catch { /* no active optimization */ }
+}
+checkInProgress();
+
 async function runOptimize(resume) {
   setLoading(true);
   const prompt = document.getElementById('groundedPrompt').value;
