@@ -152,7 +152,7 @@ const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
-      const { prompt, maxIterations, model } = JSON.parse(body);
+      const { prompt, maxIterations, model, resume } = JSON.parse(body);
       // Stream iteration progress as newline-delimited JSON
       res.writeHead(200, {
         "Content-Type": "application/x-ndjson",
@@ -167,6 +167,7 @@ const server = createServer(async (req, res) => {
         model,
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,
+        resume: !!resume,
         onIteration: (iter) => {
           res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
         },
