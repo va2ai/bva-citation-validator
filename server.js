@@ -24,7 +24,7 @@ const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
 const PORT = process.env.PORT || 4000;
 
-const VALID_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5"];
+const VALID_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5", "gemini-2.0-flash", "gemini-2.5-flash"];
 
 async function runValidation(query, grounded, model, customPrompt) {
   const genModel = VALID_MODELS.includes(model) ? model : "claude-sonnet-4-6";
@@ -162,7 +162,6 @@ const server = createServer(async (req, res) => {
       const result = await runPromptLoop({
         initialPrompt: prompt || GROUNDED_PROMPT,
         queries: TEST_QUERIES,
-        client,
         model,
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,

@@ -331,7 +331,6 @@ async function optimize() {
   const result = await runPromptLoop({
     initialPrompt: GROUNDED_PROMPT,
     queries: TEST_QUERIES,
-    client,
     apiUrl: BVA_API,
     maxIterations,
     resume,
