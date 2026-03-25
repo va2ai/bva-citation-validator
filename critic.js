@@ -41,12 +41,14 @@ const FINDINGS_SCHEMA = {
           },
         },
         required: ["sentence", "issue", "severity", "suggestion"],
+        additionalProperties: false,
       },
       description:
         "Array of issues found. Empty array if no issues detected.",
     },
   },
   required: ["findings"],
+  additionalProperties: false,
 };
 
 const CRITIC_PROMPT = `You are a legal citation auditor specializing in VA disability claims. Your job is to find problems that a simple citation-matching validator would MISS.

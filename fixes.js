@@ -13,11 +13,14 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { extractCitations as extractCitationsStructured } from "./lib/extract.js";
+import { GROUNDED_PROMPT } from "./lib/context.js";
+import { normalize } from "./lib/validate.js";
 
 const client = new Anthropic();
 
 // ---------------------------------------------------------------------------
 // Source data — two adjacent CFR sections that the model commonly confuses
+// These are intentionally stripped-down versions for demonstration purposes.
 // ---------------------------------------------------------------------------
 
 const RAW_CONTEXT_NO_TAGS = `
@@ -98,19 +101,11 @@ This ranking was computed server-side — do NOT re-rank or add cases.
 
 const NO_GROUNDING_PROMPT = `You are a VA disability claims assistant. Answer thoroughly using the provided data and your knowledge of VA law. Include specific citations.`;
 
-const GROUNDED_PROMPT = `You are a VA disability claims assistant using ONLY the source materials provided.
-RULES:
-- Every citation MUST appear verbatim in the [SOURCE_START]...[SOURCE_END] blocks.
-- You may NOT construct, infer, or recall citations from prior knowledge.
-- If data is insufficient, say so.`;
-
 const RETRIEVAL_FIRST_PROMPT = `You are a VA disability claims assistant. A pre-computed ranking has been provided.
 RULES:
 - Present the ranking EXACTLY as provided. Do not reorder, add, or remove entries.
 - You may explain each entry but must not change the ranking or scores.
 - Do NOT add cases that are not in the pre-computed result.`;
-
-// Extraction prompt removed — now handled by lib/extract.js via tool-use structured output
 
 // ---------------------------------------------------------------------------
 // Known source identifiers
@@ -122,11 +117,6 @@ const KNOWN_IDS = new Set([
   "38 U.S.C. § 1110", "38 U.S.C. § 5107", "38 U.S.C. § 1155",
   "38 CFR § 3.102", "38 CFR § 3.303", "38 CFR § 3.310", "38 CFR § 4.7",
 ]);
-
-function normalize(s) {
-  return s.replace(/C\.?F\.?R\.?/gi, "CFR").replace(/U\.S\.C\./gi, "USC")
-    .replace(/§+/g, "§").replace(/Citation\s*N[or]\.\s*/gi, "").replace(/\s+/g, " ").trim();
-}
 
 function isKnown(id) {
   const nid = normalize(id);
