@@ -520,6 +520,11 @@ function renderPanel(data, mode) {
   const adv = data.find(s => s.step === 'prompt_advisor')?.data;
   const sum = data.find(s => s.step === 'summary')?.data;
 
+  // Store advisor prompt for copy button (keyed by mode to handle Compare Both)
+  if (adv?.updated_prompt) {
+    window._advisorPrompts[mode] = adv.updated_prompt;
+  }
+
   return `
     <div class="result-panel">
       <div class="result-header ${cls}">
@@ -594,7 +599,7 @@ function renderPanel(data, mode) {
         ${adv.updated_prompt ? `
           <div style="margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Suggested updated prompt:</div>
           <div class="updated-prompt">${escapeHtml(adv.updated_prompt)}</div>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(adv.updated_prompt).replace(/'/g,'\\\'')}).then(()=>this.textContent='Copied!').catch(()=>this.textContent='Copy failed')">Copy to clipboard</button>
+          <button class="copy-btn" data-copy-prompt="${mode}">Copy to clipboard</button>
         ` : ''}
         <div class="token-info">${adv.tokens?.input_tokens || 0} tokens in / ${adv.tokens?.output_tokens || 0} out</div>
       </div>
@@ -643,6 +648,22 @@ function renderPanel(data, mode) {
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// Store advisor prompts for copy buttons (avoids inline JSON in onclick)
+window._advisorPrompts = {};
+
+// Event delegation for advisor copy buttons
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('[data-copy-prompt]');
+  if (!btn) return;
+  const key = btn.dataset.copyPrompt;
+  const text = window._advisorPrompts[key];
+  if (text) {
+    navigator.clipboard.writeText(text)
+      .then(() => btn.textContent = 'Copied!')
+      .catch(() => btn.textContent = 'Copy failed');
+  }
+});
 
 async function callValidate(query, grounded) {
   const model = document.getElementById('model').value;
@@ -802,6 +823,9 @@ function renderOptimizeResult(result, iterations) {
   const improvement = result.bestScore - result.initialScore;
   const improvementColor = improvement > 0 ? 'var(--green)' : improvement < 0 ? 'var(--red)' : 'var(--text2)';
 
+  // Store best prompt for button handlers
+  window._optimizedPrompt = result.bestPrompt;
+
   document.getElementById('optimize-result').innerHTML = `
     <div class="optimize-result">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:12px;">Optimization Complete — ${result.totalIterations} iterations</div>
@@ -822,10 +846,20 @@ function renderOptimizeResult(result, iterations) {
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:12px 0 6px;">Optimized Prompt:</div>
       <div class="updated-prompt">${escapeHtml(result.bestPrompt)}</div>
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(JSON.stringify(result.bestPrompt))}).then(()=>this.textContent='Copied!').catch(()=>this.textContent='Copy failed')">Copy to Clipboard</button>
-        <button class="copy-btn" onclick="document.getElementById('groundedPrompt').value=${JSON.stringify(JSON.stringify(result.bestPrompt))};this.textContent='Applied!'">Apply to Grounded Prompt</button>
+        <button class="copy-btn" id="opt-copy-btn">Copy to Clipboard</button>
+        <button class="copy-btn" id="opt-apply-btn">Apply to Grounded Prompt</button>
       </div>
     </div>`;
+
+  document.getElementById('opt-copy-btn').onclick = function() {
+    navigator.clipboard.writeText(window._optimizedPrompt)
+      .then(() => this.textContent = 'Copied!')
+      .catch(() => this.textContent = 'Copy failed');
+  };
+  document.getElementById('opt-apply-btn').onclick = function() {
+    document.getElementById('groundedPrompt').value = window._optimizedPrompt;
+    this.textContent = 'Applied!';
+  };
 }
 </script>
 </body>

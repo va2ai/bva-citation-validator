@@ -20,7 +20,7 @@ import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
-import { runPromptLoop } from "./lib/prompt-loop.js";
+import { runPromptLoop, loadLatestPrompt } from "./lib/prompt-loop.js";
 
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
@@ -315,6 +315,19 @@ async function run() {
 
 async function optimize() {
   const maxIterations = parseInt(process.argv.find((a) => a.startsWith("--max="))?.split("=")[1] || "10", 10);
+  const resumeMode = process.argv.includes("--resume");
+
+  // Use latest optimized prompt as starting point if resuming
+  let startPrompt = GROUNDED_PROMPT;
+  if (resumeMode) {
+    const prev = await loadLatestPrompt();
+    if (prev) {
+      startPrompt = prev;
+      console.log("  Resuming from previous optimization (optimize/latest-prompt.txt)");
+    } else {
+      console.log("  No previous optimization found, starting fresh");
+    }
+  }
 
   console.log("═".repeat(80));
   console.log("  RECURSIVE PROMPT OPTIMIZER (Autoresearch Pattern)");
@@ -323,15 +336,17 @@ async function optimize() {
   console.log();
   console.log(`  Max iterations: ${maxIterations}`);
   console.log(`  Test queries: ${TEST_QUERIES.length}`);
-  console.log(`  Starting prompt length: ${GROUNDED_PROMPT.length} chars`);
+  console.log(`  Starting prompt length: ${startPrompt.length} chars`);
+  console.log(`  Resume: ${resumeMode}`);
   console.log();
 
   const result = await runPromptLoop({
-    initialPrompt: GROUNDED_PROMPT,
+    initialPrompt: startPrompt,
     queries: TEST_QUERIES,
     client,
     apiUrl: BVA_API,
     maxIterations,
+    resume: resumeMode,
     onIteration: (iter) => {
       const delta = iter.iteration > 0
         ? ` (${iter.improved ? "+" : ""}${(iter.score - (result?.history?.[iter.iteration - 1]?.score ?? iter.score)).toFixed(2)})`
