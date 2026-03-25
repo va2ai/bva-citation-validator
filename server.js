@@ -25,7 +25,7 @@ const BVA_API = process.env.BVA_API_URL || null;
 const PORT = process.env.PORT || 4000;
 
 // Background optimization state
-let activeOptimization = null; // { done, iterations, result, error }
+let activeOptimization = null; // { done, iterations, result, error, abortController }
 const optimizeListeners = new Set(); // connected response streams
 
 const VALID_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5", "gemini-2.0-flash", "gemini-2.5-flash"];
@@ -170,7 +170,8 @@ const server = createServer(async (req, res) => {
       }
 
       // Start optimization in background
-      activeOptimization = { done: false, iterations: [], result: null, error: null };
+      const abortController = new AbortController();
+      activeOptimization = { done: false, iterations: [], result: null, error: null, abortController };
       const opt = activeOptimization;
 
       runPromptLoop({
@@ -180,6 +181,7 @@ const server = createServer(async (req, res) => {
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,
         resume: !!resume,
+        signal: abortController.signal,
         onIteration: (iter) => {
           opt.iterations.push(iter);
           // Stream to all connected listeners
@@ -222,6 +224,18 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/optimize/stop") {
+    if (activeOptimization && !activeOptimization.done) {
+      activeOptimization.abortController.abort();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ stopped: true }));
+    } else {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ stopped: false, reason: "No optimization running" }));
     }
     return;
   }
