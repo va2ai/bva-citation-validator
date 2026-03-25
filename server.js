@@ -17,7 +17,7 @@ import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
-import { runPromptLoop, listJobs } from "./lib/prompt-loop.js";
+import { runPromptLoop, loadState } from "./lib/prompt-loop.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
@@ -152,8 +152,7 @@ const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
-      const { prompt, maxIterations, model, resumeJobId } = JSON.parse(body);
-      // Stream iteration progress as newline-delimited JSON
+      const { prompt, maxIterations, model, resume } = JSON.parse(body);
       res.writeHead(200, {
         "Content-Type": "application/x-ndjson",
         "Transfer-Encoding": "chunked",
@@ -167,7 +166,7 @@ const server = createServer(async (req, res) => {
         model,
         apiUrl: BVA_API,
         maxIterations: maxIterations || 10,
-        resumeJobId: resumeJobId || undefined,
+        resume: !!resume,
         onIteration: (iter) => {
           res.write(JSON.stringify({ type: "iteration", data: iter }) + "\n");
         },
@@ -184,14 +183,19 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && req.url === "/jobs") {
+  if (req.method === "GET" && req.url === "/optimize/status") {
     try {
-      const jobs = await listJobs();
+      const state = await loadState();
+      const canResume = state && !state.completed;
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(jobs));
+      res.end(JSON.stringify({
+        canResume,
+        bestScore: canResume ? state.bestScore : null,
+        iterations: canResume ? state.totalIterations : null,
+      }));
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ canResume: false }));
     }
     return;
   }

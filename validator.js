@@ -20,7 +20,7 @@ import { createSession, logStep, finalizeSession } from "./lib/logger.js";
 import { RETRIEVAL_CONTEXT, GROUNDED_PROMPT, UNGROUNDED_PROMPT, TEST_QUERIES, buildContext } from "./lib/context.js";
 import { validateCitations } from "./lib/validate.js";
 import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
-import { runPromptLoop, loadLatestPrompt } from "./lib/prompt-loop.js";
+import { runPromptLoop } from "./lib/prompt-loop.js";
 
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
@@ -315,14 +315,7 @@ async function run() {
 
 async function optimize() {
   const maxIterations = parseInt(process.argv.find((a) => a.startsWith("--max="))?.split("=")[1] || "10", 10);
-  const resumeArg = process.argv.find((a) => a.startsWith("--resume"));
-  const resumeJobId = resumeArg
-    ? (resumeArg.includes("=") ? resumeArg.split("=")[1] : "latest")
-    : null;
-
-  if (resumeJobId) {
-    console.log(`  Resuming job: ${resumeJobId}`);
-  }
+  const resume = process.argv.includes("--resume");
 
   console.log("═".repeat(80));
   console.log("  RECURSIVE PROMPT OPTIMIZER (Autoresearch Pattern)");
@@ -332,7 +325,7 @@ async function optimize() {
   console.log(`  Max iterations: ${maxIterations}`);
   console.log(`  Test queries: ${TEST_QUERIES.length}`);
   console.log(`  Starting prompt length: ${GROUNDED_PROMPT.length} chars`);
-  if (resumeJobId) console.log(`  Resume: ${resumeJobId}`);
+  if (resume) console.log(`  Resume: picking up from last incomplete run`);
   console.log();
 
   const result = await runPromptLoop({
@@ -341,7 +334,7 @@ async function optimize() {
     client,
     apiUrl: BVA_API,
     maxIterations,
-    resumeJobId,
+    resume,
     onIteration: (iter) => {
       const delta = iter.iteration > 0
         ? ` (${iter.improved ? "+" : ""}${(iter.score - (result?.history?.[iter.iteration - 1]?.score ?? iter.score)).toFixed(2)})`
@@ -361,7 +354,6 @@ async function optimize() {
   console.log("═".repeat(80));
   console.log("  OPTIMIZATION RESULTS");
   console.log("═".repeat(80));
-  console.log(`  Job ID:        ${result.jobId}`);
   console.log(`  Iterations:    ${result.totalIterations}`);
   console.log(`  Initial score: ${result.initialScore}`);
   console.log(`  Best score:    ${result.bestScore}`);
