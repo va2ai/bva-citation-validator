@@ -1064,7 +1064,7 @@ function renderOptimizeProgress(iterations) {
         <span class="iter-num">#${iter.iteration}</span>
         <span class="iter-score">${iter.score}</span>
         <span class="iter-delta ${deltaClass}">${deltaStr}</span>
-        <span class="iter-stats">${iter.totalCitations} citations, ${iter.totalFindings} findings</span>
+        <span class="iter-stats">${iter.model ? iter.model.replace('claude-','').replace('-20251001','') + ' | ' : ''}${iter.totalCitations} cit, ${iter.totalFindings} findings</span>
         <span class="iter-status ${iter.improved ? 'status-kept' : 'status-reverted'}">${iter.improved ? 'KEPT' : 'REVERTED'}</span>
         ${iter.convergedReason ? `<span style="font-size:10px;color:var(--accent);">${escapeHtml(iter.convergedReason)}</span>` : ''}
       </div>`;
@@ -1103,7 +1103,7 @@ function renderOptimizeResult(result, iterations) {
         <span class="iter-num">#${iter.iteration}</span>
         <span class="iter-score">${iter.score}</span>
         <span class="iter-delta ${deltaClass}">${deltaStr}</span>
-        <span class="iter-stats">${iter.totalCitations} citations, ${iter.totalFindings} findings</span>
+        <span class="iter-stats">${iter.model ? iter.model.replace('claude-','').replace('-20251001','') + ' | ' : ''}${iter.totalCitations} cit, ${iter.totalFindings} findings</span>
         <span class="iter-status ${iter.improved ? 'status-kept' : 'status-reverted'}">${iter.improved ? 'KEPT' : 'REVERTED'}</span>
         ${iter.convergedReason ? `<span style="font-size:10px;color:var(--accent);">${escapeHtml(iter.convergedReason)}</span>` : ''}
       </div>`;
