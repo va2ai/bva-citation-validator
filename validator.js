@@ -30,12 +30,12 @@ const BVA_API = process.env.BVA_API_URL || null;
 // ---------------------------------------------------------------------------
 
 async function run() {
-  const ungounded = process.argv.includes("--ungrounded");
+  const ungroundedMode = process.argv.includes("--ungrounded");
   const query =
     process.argv.find((a) => !a.startsWith("-") && a !== process.argv[0] && a !== process.argv[1]) ||
     "What are the rating criteria for PTSD under 38 CFR, and which BVA decisions support direct service connection for PTSD secondary to MST or TBI? Include specific citation numbers.";
 
-  const session = createSession(query, ungounded ? "ungrounded" : "grounded", "claude-sonnet-4-6");
+  const session = createSession(query, ungroundedMode ? "ungrounded" : "grounded", "claude-sonnet-4-6");
 
   console.log("═".repeat(80));
   console.log("  POST-GENERATION CITATION VALIDATOR");
@@ -44,7 +44,7 @@ async function run() {
   console.log();
   console.log(`Query: ${query}`);
   console.log(`Session: ${session.id}`);
-  if (ungounded) {
+  if (ungroundedMode) {
     console.log();
     console.log(
       "  ** UNGROUNDED MODE: system prompt constraint removed to demonstrate **"
@@ -58,7 +58,7 @@ async function run() {
   // --- Step 1: Grounded generation ---
   console.log("─".repeat(80));
   console.log(
-    ungounded
+    ungroundedMode
       ? "STEP 1: UNGROUNDED generation (no citation constraint)"
       : "STEP 1: Grounded generation with sentinel-tagged context"
   );
@@ -71,7 +71,7 @@ async function run() {
 
   const contextBlock = buildContext();
 
-  const systemPrompt = ungounded ? UNGROUNDED_PROMPT : GROUNDED_PROMPT;
+  const systemPrompt = ungroundedMode ? UNGROUNDED_PROMPT : GROUNDED_PROMPT;
 
   const generationResponse = await client.messages.create({
     model: "claude-sonnet-4-6",
@@ -328,6 +328,8 @@ async function optimize() {
   if (resume) console.log(`  Resume: picking up from last incomplete run`);
   console.log();
 
+  let previousScore = null;
+
   const result = await runPromptLoop({
     initialPrompt: GROUNDED_PROMPT,
     queries: TEST_QUERIES,
@@ -335,14 +337,16 @@ async function optimize() {
     maxIterations,
     resume,
     onIteration: (iter) => {
-      const delta = iter.iteration > 0
-        ? ` (${iter.improved ? "+" : ""}${(iter.score - (result?.history?.[iter.iteration - 1]?.score ?? iter.score)).toFixed(2)})`
-        : "";
+      const delta =
+        previousScore === null
+          ? ""
+          : ` (${iter.score >= previousScore ? "+" : ""}${(iter.score - previousScore).toFixed(2)})`;
       console.log(
         `  Iteration ${iter.iteration}: score=${iter.score}${delta} | ` +
         `citations=${iter.totalCitations} findings=${iter.totalFindings} ` +
         `${iter.improved ? "KEPT" : "REVERTED"}`
       );
+      previousScore = iter.score;
       if (iter.convergedReason) {
         console.log(`  -> Converged: ${iter.convergedReason}`);
       }

@@ -9,7 +9,7 @@ import 'dotenv/config';
 import { createServer } from "http";
 import { readFile } from "fs/promises";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, resolve, sep, normalize as pathNormalize } from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { runCritic } from "./critic.js";
 import { extractCitations } from "./lib/extract.js";
@@ -20,9 +20,40 @@ import { suggestPromptUpdates } from "./lib/prompt-advisor.js";
 import { runPromptLoop, loadState } from "./lib/prompt-loop.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = resolve(__dirname, "public");
+const MAX_BODY_BYTES = 256 * 1024;
 const client = new Anthropic();
 const BVA_API = process.env.BVA_API_URL || null;
 const PORT = process.env.PORT || 4000;
+
+async function readJsonBody(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) {
+      const err = new Error("Request body too large");
+      err.status = 413;
+      throw err;
+    }
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+}
+
+function safePublicPath(urlPath) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath.split("?")[0]);
+  } catch {
+    return null;
+  }
+  const candidate = resolve(PUBLIC_DIR, "." + pathNormalize(decoded));
+  if (candidate !== PUBLIC_DIR && !candidate.startsWith(PUBLIC_DIR + sep)) {
+    return null;
+  }
+  return candidate;
+}
 
 // Background optimization state
 let activeOptimization = null; // { done, iterations, result, error, abortController }
@@ -136,9 +167,9 @@ const server = createServer(async (req, res) => {
     let filePath = null;
 
     if (req.url === "/" || req.url === "/index.html") {
-      filePath = join(__dirname, "public", "index.html");
+      filePath = join(PUBLIC_DIR, "index.html");
     } else if (req.url.startsWith("/css/") || req.url.startsWith("/js/")) {
-      filePath = join(__dirname, "public", req.url);
+      filePath = safePublicPath(req.url);
     }
 
     if (filePath) {
@@ -156,15 +187,13 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/validate") {
-    let body = "";
-    for await (const chunk of req) body += chunk;
     try {
-      const { query, grounded, model, systemPrompt } = JSON.parse(body);
+      const { query, grounded, model, systemPrompt } = await readJsonBody(req);
       const result = await runValidation(query, grounded, model, systemPrompt);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
+      res.writeHead(err.status || 500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
     }
     return;
@@ -175,10 +204,8 @@ const server = createServer(async (req, res) => {
   // ---------------------------------------------------------------------------
 
   if (req.method === "POST" && req.url === "/optimize") {
-    let body = "";
-    for await (const chunk of req) body += chunk;
     try {
-      const { prompt, maxIterations, model, optimizerModel, resume } = JSON.parse(body);
+      const { prompt, maxIterations, model, optimizerModel, resume } = await readJsonBody(req);
 
       // If already running, reject
       if (activeOptimization && !activeOptimization.done) {
@@ -241,7 +268,7 @@ const server = createServer(async (req, res) => {
       req.on("close", () => optimizeListeners.delete(res));
 
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
+      res.writeHead(err.status || 500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
     }
     return;
