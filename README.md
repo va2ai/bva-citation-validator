@@ -1,154 +1,287 @@
 # Post-Generation Hallucination Validator
 
-A production-tested approach to detecting and preventing LLM hallucinations in systems that answer user queries from structured data. Built for a multi-agent legal intelligence platform where fabricated citations in AI responses could directly harm veterans' disability claims.
+A production-derived validation architecture for detecting unsupported citations, identifiers, and source-dependent claims in LLM responses generated from structured retrieval data.
 
-This repo demonstrates the diagnostic tooling and fixes — the same infrastructure used in production to drop citation hallucination rates from ~15% to under 1.5% of sessions.
+This repository demonstrates a five-layer reliability pattern for high-stakes RAG and agentic systems: sentinel-tagged source packets, grounded generation constraints, structured claim extraction, deterministic source cross-reference, adversarial critique, and regression testing.
+
+The demo is implemented for veterans-law citation validation because fabricated or stale citations can materially harm legal research and claims analysis. The same architecture applies to any system where an LLM answers from structured records: legal research, healthcare operations, insurance workflows, compliance systems, ecommerce catalogs, financial analytics, and internal enterprise reporting.
+
+> **Boundary:** this project validates whether generated responses are grounded in provided source material. It does not determine legal correctness, predict claim outcomes, provide legal advice, or replace attorney / accredited representative review.
+
+## Production Context
+
+This validator was built from failure analysis in V2V Intelligence, a multi-agent legal-research SaaS for veterans-law workflows backed by a corpus of 1.85M+ BVA source documents and related authorities.
+
+In internal production monitoring over a four-week window, this architecture reduced detected citation-hallucination sessions from roughly **15%** to **below 1.5%** under the project's validation criteria.
+
+That metric is intentionally scoped: it measures detected fabricated or unsupported structured references per session, not global legal correctness.
 
 ## The Problem
 
-When an LLM answers questions using retrieved data (JSON payloads, API results, database records), it can return confidently stated figures, identifiers, or conclusions that aren't supported by the underlying data. These hallucinations are especially dangerous when users act on the outputs without manual verification.
+LLM hallucinations rarely look broken.
 
-In my system, I identified four distinct failure modes through systematic log analysis:
+They look confident.
 
-**1. Context boundary hallucination** — The model correctly references a concept from one data source but assigns it the identifier of an adjacent one. The retrieved payload has the right data; the model just misattributes which record it came from.
+In production RAG systems, the dangerous failure mode is not gibberish. It is a response that cites a plausible section number, assigns the right fact to the wrong source, or draws a conclusion the retrieved data never supported.
 
-**2. Interpolated identifiers** — When the retriever returns 3-5 results as context, the model occasionally generates additional "supporting" records that don't exist — constructing plausible-looking identifiers from patterns internalized during training.
+In regulated workflows, that can ship unnoticed unless a post-generation validation layer checks the answer before it reaches the user.
 
-**3. Temporal staleness** — The model cites real cases or regulations that have been overturned, superseded, or updated. The citation technically exists but is no longer valid authority.
+Through production log analysis, four recurring failure modes appeared:
 
-**4. Aggregation/reasoning errors** — The model draws conclusions, computes comparisons, or makes inferences that go beyond what the sources explicitly state. Subtle and hard to catch with simple pattern matching.
+1. **Context-boundary hallucination** — the model correctly references a concept from one retrieved source but assigns it the identifier of an adjacent source.
+2. **Interpolated identifiers** — the model constructs plausible-looking citation numbers, docket numbers, section numbers, SKU IDs, or record IDs that were never retrieved.
+3. **Temporal staleness** — the cited authority or record exists, but has been superseded, amended, retired, or otherwise made stale.
+4. **Aggregation / reasoning errors** — the model computes, compares, or infers something beyond what the source packet supports.
 
-All four failure modes produce responses that read as authoritative. Without a verification layer, there's no signal that anything is wrong.
+The common feature: the answer reads as authoritative even when the grounding is wrong.
 
-## The Fix: Five-Layer Architecture
+## Design Principle
 
-### Layer 1: Sentinel-Tagged Context
-Instead of passing raw data to the model, each retrieved record is wrapped with explicit boundary markers:
+> The model may draft the answer, but it does not get final authority over whether the answer is grounded.
 
+This repo uses LLMs where they are useful — generation, extraction, and adversarial review — but the core grounding decision is deterministic wherever possible.
+
+The extraction pass identifies candidate claims. The validator then checks those claims against sentinel-tagged source records, metadata, and optional live API verification.
+
+## Five-Layer Architecture
+
+### 1. Sentinel-Tagged Retrieval
+
+Each retrieved record is wrapped with explicit source boundaries:
+
+```text
+[SOURCE_START: 38 CFR § 4.130]
+...source text...
+[SOURCE_END: 38 CFR § 4.130]
 ```
-[SOURCE_START: record_id_123]
-{ ...payload data... }
-[SOURCE_END: record_id_123]
+
+The model receives both the content and the source identity in a format that is easy to preserve. This reduces adjacent-record bleed and source misattribution.
+
+### 2. Grounding-Constrained Generation
+
+The system prompt requires every legal citation, identifier, docket number, figure, or source-dependent claim to be supported by the tagged source packet.
+
+If the source material is insufficient, the model is instructed to say what is missing instead of filling gaps from prior knowledge.
+
+### 3. Structured Claim Extraction
+
+A lightweight extraction pass converts prose into machine-checkable JSON. In this demo, the extractor pulls legal citations from the generated response:
+
+* CFR citations
+* BVA citation numbers
+* CAVC references
+* U.S.C. references
+* The specific claim being made about each citation
+
+In another domain, the same step could extract ICD-10 codes, SKU IDs, dollar figures, ticker symbols, date ranges, invoice numbers, or account identifiers.
+
+### 4. Deterministic Cross-Reference Validation
+
+Extracted claims are checked against:
+
+* the sentinel-tagged source packet
+* source metadata
+* temporal status fields such as `status`, `effective_date`, and `superseded_by`
+* optional live API / database verification
+
+Possible statuses include:
+
+| Status           | Meaning                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `VERIFIED`       | Citation or identifier appears in the provided source packet.                         |
+| `NOT_IN_SOURCES` | Citation was generated but not present in retrieved sources.                          |
+| `UNGROUNDED`     | Citation exists in the live corpus but was not part of the retrieved source packet.   |
+| `HALLUCINATED`   | Citation is absent from the retrieved sources and cannot be verified through the API. |
+| `OUTDATED`       | Citation exists but is marked stale, superseded, or otherwise not current.            |
+
+### 5. Adversarial Critic + Regression Monitoring
+
+A separate critic pass reviews the answer for errors that exact matching may miss:
+
+* unsupported conclusions
+* misleading citation use
+* overbroad interpretations
+* temporal assumptions
+* aggregation errors
+
+Known failure cases are frozen into regression tests so fixes do not silently regress.
+
+## Validator Types
+
+| Validator                  | Catches                                                    | Method                                                                                  |
+| -------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Source-grounding validator | Fabricated identifiers, wrong source attribution           | Deterministic match against sentinel-tagged source IDs and extracted source identifiers |
+| Temporal validator         | Superseded or stale authority                              | Metadata and optional API status check                                                  |
+| Critic pass                | Unsupported reasoning or misleading use of a real citation | LLM review against the source packet and validation report                              |
+
+## What This Demonstrates
+
+This repository is not just a prompt-engineering demo. It demonstrates a production reliability pattern for LLM systems that must answer from structured data:
+
+* failure-mode analysis from real logs
+* sentinel-tagged source packet design
+* grounded generation constraints
+* structured claim extraction
+* deterministic source cross-reference
+* temporal validity checking
+* optional live API verification
+* adversarial reasoning review
+* frozen-case regression tests
+* JSONL monitoring for ongoing drift detection
+
+## Architecture
+
+```text
+User Query
+    │
+    ▼
+┌─────────────────────────┐
+│ Retrieval Layer          │  ← API / tool calls fetch relevant records
+│ Sentinel-tagged sources  │     with source IDs and temporal metadata
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Grounded Generation      │  ← System prompt constrains citations
+│ Anthropic / Claude       │     to provided source packet
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Structured Extractor     │  ← LLM extracts citations / claims
+│ Lightweight pass         │     into typed JSON
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Cross-Reference          │  ← Deterministic grounding check
+│ Validator                │     + metadata + optional live API
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Adversarial Critic       │  ← Reviews unsupported reasoning
+│ Lightweight pass         │     and misleading citation use
+└────────────┬────────────┘
+             │
+         ┌───┴───┐
+         │       │
+       PASS    FAIL
+         │       │
+    Return    Regenerate,
+    response  block, or warn
 ```
 
-This gives the model unambiguous anchoring points, eliminating the context boundary attribution problem almost entirely.
+## Domain Mapping
 
-### Layer 2: Grounding Constraint in the System Prompt
-A hard rule requiring every identifier in the response to appear verbatim in the source tags. The model must say "insufficient data" rather than fill gaps from training knowledge.
+| This Demo                       | Same Pattern in Another System                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| CFR / BVA / CAVC citations      | ICD-10 codes, CPT codes, SKU IDs, ticker symbols, invoice IDs                          |
+| Sentinel-tagged legal documents | Sentinel-tagged JSON payloads, database rows, search results, API records              |
+| Citation extractor              | Claim extractor for figures, dates, IDs, percentages, or record references             |
+| BVA API verification            | Your product API, database, search index, warehouse, or policy engine                  |
+| Temporal legal metadata         | Effective dates, product status, policy version, account status, market data timestamp |
+| Adversarial legal critic        | Domain-specific reviewer for unsupported conclusions                                   |
 
-### Layer 3: Post-Generation Validation
-Every response goes through a second lightweight LLM pass:
-1. **Extract** — A structured extraction call pulls all verifiable claims (identifiers, figures, references) into a typed JSON array
-2. **Cross-reference** — Each extracted claim is checked against the source data provided to the model, including temporal metadata (status, effective date, superseded_by)
-3. **Verify** — Optionally, claims are verified against the live data source (API, database) to catch edge cases
-4. **Act** — Failed responses are either regenerated with a stricter prompt or returned with a validation warning
-
-### Layer 4: Adversarial Critic Pass
-A third LLM pass reviews the response against the source data and validation report to catch subtle issues that pattern matching misses:
-- Claims that go beyond what sources support
-- Unsupported conclusions or reasoning
-- Citations used in misleading context
-- Temporal assumptions (assuming current validity without checking)
-
-### Layer 5: Regression Testing & Monitoring
-Frozen failure cases from real production incidents are re-run against the pipeline to verify fixes continue to hold. Structured JSON logging tracks every session for ongoing monitoring.
-
-## How This Maps to Your Stack
-
-| This Demo | Your Pipeline |
-|---|---|
-| Anthropic API (Claude) | Anthropic API (same) |
-| Node.js + `@anthropic-ai/sdk` | Node.js (same) |
-| Sentinel-tagged legal documents | Sentinel-tagged JSON payloads from your API |
-| Citation extraction (CFR, BVA, CAVC) | Claim extraction (dollar figures, SKU IDs, percentages, date ranges) |
-| BVA API verification | Your platform API verification |
-| Regulatory identifiers | Financial identifiers and metrics |
-
-The architecture is identical — swap the domain-specific extractors and the verification endpoints, and this runs against your pipeline directly.
+The architecture is identifier-agnostic. Swap the extractor schema and verification endpoint; the failure modes are largely the same.
 
 ## Running the Demo
+
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-### Web GUI (recommended)
+Run the web GUI:
 
 ```bash
 ANTHROPIC_API_KEY=sk-... node server.js
 # Open http://localhost:4000
 ```
 
-With live BVA API verification:
+Run with optional live BVA API verification:
+
 ```bash
 ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node server.js
 ```
 
-The GUI provides:
-- **Example query dropdown** — pre-built queries covering PTSD rating criteria, MST evidence, TBI secondary connection, cross-case comparison
-- **Model selector** — switch between Claude Sonnet 4.6, Haiku 4.5, Opus 4.6, or Sonnet 4.5
-- **System prompt editor** — view and customize both the grounded and ungrounded system prompts in real time
-- **Compare Both** — runs grounded and ungrounded side-by-side so you can see the hallucination delta
-- **Validation report** — each citation color-coded: green (VERIFIED), red (HALLUCINATED), amber (NOT_IN_SOURCES), purple (UNGROUNDED), orange (OUTDATED)
-- **Critic review panel** — adversarial findings with severity badges (HIGH/MEDIUM/LOW)
-- **Session logging** — each run logged to `logs/sessions.jsonl` for monitoring
-
-### CLI
+Run from CLI:
 
 ```bash
-# Grounded (with hallucination guardrails)
+# Grounded mode
 ANTHROPIC_API_KEY=sk-... node validator.js
 
-# Ungrounded (demonstrates what the validator catches)
+# Ungrounded mode: demonstrates what the validator catches
 ANTHROPIC_API_KEY=sk-... node validator.js --ungrounded
 
 # With live API verification
 ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node validator.js --ungrounded
 ```
 
-### What you'll see
+## GUI Features
 
-**Grounded mode** — all citations verified, model stays anchored to source data:
-```
+The local web interface includes:
+
+* example query dropdown
+* grounded vs. ungrounded comparison mode
+* model selector
+* system prompt editor
+* structured extraction output
+* validation report with status categories
+* adversarial critic panel
+* session logging to `logs/sessions.jsonl`
+* prompt optimization workflow for testing prompt revisions against regression queries
+
+## Example Output
+
+Grounded mode should keep the answer tied to the retrieved source packet:
+
+```text
 SUMMARY
   Total citations extracted:  4
-  Verified (source + API):    4
+  Verified:                   4
   All citations verified against sentinel-tagged source context.
 ```
 
-**Ungrounded mode** — validator catches fabricated citations:
-```
+Ungrounded mode commonly produces the same class of interpolated-identifier failures observed in production logs: plausible-looking citations or record IDs that do not appear in the retrieved source packet.
+
+```text
 SUMMARY
   Total citations extracted:  11
-  Verified (source + API):    6
+  Verified:                   6
   Not in source context:      1
-  Confirmed hallucinations:   4   <- fabricated citations
+  Confirmed hallucinations:   4
 
   ACTION: Response contains citations not grounded in retrieved sources.
-  In production, this triggers: regeneration with stricter prompt OR
-  validation warning surfaced to the practitioner.
+  In production, this triggers regeneration, blocking, or a validation warning.
 ```
-
-The hallucinations are the exact "interpolated identifier" failure mode — the model generates plausible-looking CAVC case references and CFR sections from training knowledge, none of which appeared in the source context. The live API confirms they don't exist in the corpus either.
 
 ## Project Structure
 
-```
+```text
 bva-citation-validator/
-├── validator.js              # CLI pipeline (5-step: generate → extract → validate → critic → report)
-├── server.js                 # Web GUI server (serves index.html + /validate API)
-├── critic.js                 # Adversarial critic module (third LLM pass)
-├── fixes.js                  # Fix demonstration test suite
-├── index.html                # Web GUI (6-step display with critic panel)
+├── validator.js                 # CLI pipeline
+├── server.js                    # Local web GUI server
+├── critic.js                    # Adversarial critic module
+├── fixes.js                     # Fix demonstration suite
 ├── package.json
 ├── README.md
 ├── lib/
-│   └── logger.js             # Structured JSON session logging
+│   ├── context.js               # Simulated retrieval context and prompts
+│   ├── extract.js               # Structured citation extraction
+│   ├── validate.js              # Cross-reference validation
+│   ├── logger.js                # JSONL session logging
+│   ├── providers.js             # Anthropic / Gemini provider abstraction
+│   ├── prompt-advisor.js        # Prompt improvement suggestions
+│   └── prompt-loop.js           # Recursive prompt optimization loop
+├── public/
+│   └── index.html               # Web GUI assets
 ├── logs/
-│   └── .gitkeep              # Session logs written here (gitignored)
+│   └── .gitkeep                 # Session logs written here locally
 └── tests/
     └── regression/
-        ├── runner.js          # Regression test runner
+        ├── runner.js
         └── cases/
             ├── 001-context-boundary.json
             ├── 002-interpolated-identifier.json
@@ -156,99 +289,130 @@ bva-citation-validator/
             └── 004-fabricated-docket.json
 ```
 
-## Architecture
+## Monitoring
 
-```
-User Query
-    │
-    ▼
-┌─────────────────────────┐
-│  Retrieval Layer         │  ← MCP tools / API calls fetch relevant data
-│  (sentinel-tagged)       │     with temporal metadata (status, dates)
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│  Grounded Generation     │  ← System prompt with citation constraints
-│  (Anthropic API)         │
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│  Citation Extractor      │  ← Second LLM pass: structured extraction
-│  (lightweight pass)      │
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│  Cross-Reference         │  ← Check each claim against source data
-│  Validator               │     + temporal status + optional live API
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│  Adversarial Critic      │  ← Third LLM pass: challenges reasoning,
-│  (lightweight pass)      │     catches subtle errors validator misses
-└────────────┬────────────┘
-             │
-         ┌───┴───┐
-         │       │
-      PASS     FAIL
-         │       │
-    Return    Regenerate or
-    response  flag warning
-```
+Each validation session is written as structured JSONL:
 
-## Monitoring & Regression Testing
-
-### Structured Logging
-Every validation session is logged to `logs/sessions.jsonl` as structured JSON:
 ```json
 {
   "id": "uuid",
-  "timestamp": "2026-03-20T...",
+  "timestamp": "2026-03-20T00:00:00.000Z",
   "query": "...",
   "mode": "grounded",
   "model": "claude-sonnet-4-6",
-  "citations": { "total": 8, "verified": 7, "outdated": 1, "hallucinated": 0 },
-  "critic": { "findings": 1, "high": 0, "medium": 1, "low": 0 },
+  "citations": {
+    "total": 8,
+    "verified": 7,
+    "outdated": 1,
+    "hallucinated": 0
+  },
+  "critic": {
+    "findings": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0
+  },
   "duration_ms": 4523
 }
 ```
 
-### Regression Test Suite
-Frozen failure cases in `tests/regression/cases/` are re-run to verify fixes hold:
+For real deployments, logs should be redacted or hashed before storing sensitive user queries or source material.
+
+## Regression Testing
+
+Frozen failure cases live in `tests/regression/cases/`.
+
+Run:
+
 ```bash
 npm run test:regression
 ```
 
-Each case defines expected citation outcomes (verified, outdated, flagged) and which fix should catch the failure mode. CI-friendly exit codes (0 = pass, 1 = regression).
+Each case defines:
+
+* the failure mode
+* the query that triggers it
+* expected verified citations
+* expected outdated citations
+* known bad citations that must not be verified
+* the fix expected to catch the issue
+
+The current regression runner uses live LLM calls. For stricter CI, split this into deterministic frozen-response tests and optional LLM integration tests.
 
 ## Results
 
-Validated over a 4-week window after deployment:
+Internal production monitoring over a four-week window showed:
 
-| Metric | Before | After |
-|---|---|---|
-| Sessions with citation hallucinations | ~15% | <1.5% |
-| Context boundary misattributions | Common | Near zero (sentinel tags) |
-| Interpolated identifiers | Occasional | Caught by validator |
-| Outdated/superseded citations | Undetected | Flagged by temporal validation |
-| Subtle reasoning errors | Undetected | Caught by critic pass |
+| Metric                                         |                    Before |                            After |
+| ---------------------------------------------- | ------------------------: | -------------------------------: |
+| Detected sessions with citation hallucinations |                      ~15% |                            <1.5% |
+| Context-boundary misattributions               |                    Common | Near zero after sentinel tagging |
+| Interpolated identifiers                       |                Occasional |  Caught by validator / API check |
+| Outdated or superseded citations               |     Previously undetected |         Flagged through metadata |
+| Unsupported reasoning using real citations     | Previously hard to detect |          Surfaced by critic pass |
 
-## What I'd Do on Your Codebase
+These are production-monitoring results for this project and validation definition. They do not imply general legal correctness or universal hallucination elimination.
 
-1. **Audit the query pipeline** — trace how JSON payloads flow from your API through the prompt to the model response. Identify where the model has opportunities to fabricate (large payloads with adjacent records, aggregation queries, comparison queries).
+## How I Would Apply This to Another Codebase
 
-2. **Analyze the negative chat records** — build an extraction pipeline to pull every verifiable claim from flagged sessions and cross-reference against the source payloads. Categorize failure modes (wrong figures, fabricated SKUs, incorrect aggregations, hallucinated trends).
+1. **Trace the source-to-answer path**
 
-3. **Implement fixes per failure mode** — sentinel tagging for attribution errors, grounding constraints for interpolation, pre-computation for aggregation queries (the model explains computed results, it doesn't compute), post-generation validation as the safety net.
+   * Identify how API results, database rows, or JSON payloads enter the prompt.
+   * Locate places where adjacent records, summaries, or aggregation payloads may blur together.
 
-4. **Add test coverage** — the `--ungrounded` mode in this demo is the pattern: for each failure mode, a test that deliberately provokes it and verifies the fix catches it.
+2. **Extract verifiable claims from bad sessions**
 
-5. **Run the validator against session logs** — the same diagnostic tooling that identifies problems becomes the ongoing monitoring layer. New failure modes surface automatically.
+   * Pull identifiers, figures, percentages, dates, and conclusions from negative chat logs.
+   * Compare each claim against the original payload supplied to the model.
 
-## Related Repositories
+3. **Classify failure modes**
 
-- [bvaapi2](https://github.com/va2ai/bvaapi2) — The BVA Decision Search API and MCP server (FastAPI, GCP Cloud Run) that this validator integrates with
-- [bva-decision-intelligence](https://github.com/va2ai/bva-decision-intelligence) — Multi-agent research platform with Citation QA agent
+   * wrong source attribution
+   * fabricated identifiers
+   * stale or superseded records
+   * incorrect aggregation or comparison
+   * unsupported reasoning beyond the data
+
+4. **Implement targeted controls**
+
+   * sentinel tags for source attribution
+   * grounding constraints for identifier discipline
+   * precomputed metrics for aggregation-heavy queries
+   * post-generation validation before display
+   * warnings, blocking, or regeneration on failed validation
+
+5. **Turn failures into regression tests**
+
+   * Freeze real bad outputs as test cases.
+   * Verify that every fix catches the original failure.
+   * Track validation outcomes in session logs for drift monitoring.
+
+## Security Notes
+
+This is a reference implementation and local demo server. Before exposing it publicly:
+
+* add authentication
+* add request body limits
+* add rate limiting
+* redact or hash logged queries
+* separate deterministic CI tests from live LLM integration tests
+* harden citation normalization to avoid substring false positives
+
+## Tech Stack
+
+* Node.js
+* Anthropic SDK
+* Claude structured-output extraction
+* Optional Gemini generation support in the provider abstraction
+* JSONL logging
+* Local HTTP server
+* Regression-test fixtures
+
+## Related Work
+
+* `bvaapi2` — BVA Decision Search API and MCP server used by related V2V Intelligence workflows
+* `bva-decision-intelligence` — multi-agent research platform with citation QA patterns
+
+## License
+
+No license file is included yet. Add a license before encouraging external reuse.
