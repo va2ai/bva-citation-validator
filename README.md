@@ -10,11 +10,11 @@ The demo is implemented for veterans-law citation validation because fabricated 
 
 ## Production Context
 
-This validator was built from failure analysis in V2V Intelligence, a multi-agent legal-research SaaS for veterans-law workflows backed by a corpus of 1.85M+ BVA source documents and related authorities.
+This validator was built from failure analysis in a separate private system — a multi-agent legal-research platform for veterans-law workflows backed by a large BVA-decision corpus and related authorities.
 
-In internal production monitoring over a four-week window, this architecture reduced detected citation-hallucination sessions from roughly **15%** to **below 1.5%** under the project's validation criteria.
+In internal production monitoring over a four-week window, the architecture reduced detected citation-hallucination sessions from roughly **15%** to **below 1.5%** under the project's validation criteria.
 
-That metric is intentionally scoped: it measures detected fabricated or unsupported structured references per session, not global legal correctness.
+That metric is intentionally scoped: it counts sessions in which this class of validator flagged fabricated, ungrounded, or stale structured references. It is not a measurement of legal correctness, user satisfaction, or universal hallucination elimination, and the numbers do not come from this repository — they come from the private system this architecture was distilled from. See [PROOF.md](./PROOF.md) for the full boundary on what is and is not reproducible here, and [docs/eval-notes.md](./docs/eval-notes.md) for how the metric is defined.
 
 ## The Problem
 
@@ -187,37 +187,40 @@ The architecture is identifier-agnostic. Swap the extractor schema and verificat
 
 ## Running the Demo
 
-Install dependencies:
+Install dependencies and copy the environment template:
 
 ```bash
 npm install
+cp .env.example .env   # then edit .env and set ANTHROPIC_API_KEY
 ```
 
 Run the web GUI:
 
 ```bash
-ANTHROPIC_API_KEY=sk-... node server.js
+node server.js
 # Open http://localhost:4000
 ```
 
-Run with optional live BVA API verification:
+Run with optional live verification API:
 
 ```bash
-ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node server.js
+BVA_API_URL=https://your-api.example.com node server.js
 ```
 
 Run from CLI:
 
 ```bash
-# Grounded mode
-ANTHROPIC_API_KEY=sk-... node validator.js
+# Grounded mode (uses the rules in lib/context.js)
+node validator.js
 
 # Ungrounded mode: demonstrates what the validator catches
-ANTHROPIC_API_KEY=sk-... node validator.js --ungrounded
+node validator.js --ungrounded
 
 # With live API verification
-ANTHROPIC_API_KEY=sk-... BVA_API_URL=https://your-api.run.app node validator.js --ungrounded
+BVA_API_URL=https://your-api.example.com node validator.js --ungrounded
 ```
+
+The `BVA_API_URL` endpoint is optional and is the integration point for live verification against a corpus index. Without it, validation runs against the sentinel-tagged source packet only and unverified citations surface as `NOT_IN_SOURCES` instead of being split into `UNGROUNDED` vs `HALLUCINATED`.
 
 ## GUI Features
 
@@ -264,9 +267,15 @@ bva-citation-validator/
 ├── validator.js                 # CLI pipeline
 ├── server.js                    # Local web GUI server
 ├── critic.js                    # Adversarial critic module
-├── fixes.js                     # Fix demonstration suite
+├── fixes.js                     # Fix demonstration suite (live, not assertion-based)
 ├── package.json
 ├── README.md
+├── PROOF.md                     # Scoping boundary: what is reproducible here
+├── .env.example
+├── docs/
+│   ├── architecture.md          # How the pipeline is wired together
+│   ├── failure-modes.md         # The four hallucination categories the validator catches
+│   └── eval-notes.md            # Scoring, test command, optimizer worked example
 ├── lib/
 │   ├── context.js               # Simulated retrieval context and prompts
 │   ├── extract.js               # Structured citation extraction
@@ -276,9 +285,9 @@ bva-citation-validator/
 │   ├── prompt-advisor.js        # Prompt improvement suggestions
 │   └── prompt-loop.js           # Recursive prompt optimization loop
 ├── public/
-│   └── index.html               # Web GUI assets
-├── logs/
-│   └── .gitkeep                 # Session logs written here locally
+│   ├── index.html               # Web GUI markup
+│   ├── css/styles.css
+│   └── js/                      # app.js, optimize.js, render.js, utils.js
 └── tests/
     └── regression/
         ├── runner.js
@@ -337,11 +346,11 @@ Each case defines:
 * known bad citations that must not be verified
 * the fix expected to catch the issue
 
-The current regression runner uses live LLM calls. For stricter CI, split this into deterministic frozen-response tests and optional LLM integration tests.
+The current regression runner uses live LLM calls and therefore requires `ANTHROPIC_API_KEY`. For stricter CI, split this into deterministic frozen-response tests and optional LLM integration tests. See [docs/eval-notes.md](./docs/eval-notes.md) for the test command and scoring notes.
 
 ## Results
 
-Internal production monitoring over a four-week window showed:
+These are detection-rate figures from a four-week monitoring window in the private system this architecture was distilled from, **not** measurements produced by this repository. They are reported here because the architecture is the artifact and the numbers are what motivated each layer.
 
 | Metric                                         |                    Before |                            After |
 | ---------------------------------------------- | ------------------------: | -------------------------------: |
@@ -351,7 +360,7 @@ Internal production monitoring over a four-week window showed:
 | Outdated or superseded citations               |     Previously undetected |         Flagged through metadata |
 | Unsupported reasoning using real citations     | Previously hard to detect |          Surfaced by critic pass |
 
-These are production-monitoring results for this project and validation definition. They do not imply general legal correctness or universal hallucination elimination.
+These are detection-rate results under this project's validation definitions. They do not imply general legal correctness or universal hallucination elimination, and they are not reproducible from this repo. See [PROOF.md](./PROOF.md) and [docs/eval-notes.md](./docs/eval-notes.md) for the boundary.
 
 ## How I Would Apply This to Another Codebase
 
@@ -408,10 +417,12 @@ This is a reference implementation and local demo server. Before exposing it pub
 * Local HTTP server
 * Regression-test fixtures
 
-## Related Work
+## Further Reading In This Repo
 
-* `bvaapi2` — BVA Decision Search API and MCP server used by related V2V Intelligence workflows
-* `bva-decision-intelligence` — multi-agent research platform with citation QA patterns
+* [PROOF.md](./PROOF.md) — what is and is not reproducible from this codebase.
+* [docs/architecture.md](./docs/architecture.md) — wiring of the five-layer pipeline, with file-by-file responsibilities.
+* [docs/failure-modes.md](./docs/failure-modes.md) — the four hallucination categories the pipeline is designed to catch, with the production-log signature of each.
+* [docs/eval-notes.md](./docs/eval-notes.md) — scoring formula, test invocation, and an example of an optimizer-evolved prompt.
 
 ## License
 
