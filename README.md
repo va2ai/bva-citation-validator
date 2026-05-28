@@ -1,5 +1,7 @@
 # Post-Generation Hallucination Validator
 
+![Ungrounded vs. grounded validator output — five-layer architecture reduced detected citation-hallucination sessions from ~15% to <1.5% in production](docs/images/hero-before-after.png)
+
 A production-derived validation architecture for detecting unsupported citations, identifiers, and source-dependent claims in LLM responses generated from structured retrieval data.
 
 This repository demonstrates a five-layer reliability pattern for high-stakes RAG and agentic systems: sentinel-tagged source packets, grounded generation constraints, structured claim extraction, deterministic source cross-reference, adversarial critique, and regression testing.
@@ -350,15 +352,14 @@ The current regression runner uses live LLM calls and therefore requires `ANTHRO
 
 ## Results
 
-These are detection-rate figures from a four-week monitoring window in the private system this architecture was distilled from, **not** measurements produced by this repository. They are reported here because the architecture is the artifact and the numbers are what motivated each layer.
+These are detection-rate figures from a four-week monitoring window in the private system this architecture was distilled from, **not** measurements produced by this repository. They are reported here because the architecture is the artifact and the numbers are what motivated each layer. The headline figure — sessions dropping from roughly 15% to below 1.5% — is stated once in [Production Context](#production-context); the table below details which failure modes each layer addressed during that same window.
 
-| Metric                                         |                    Before |                            After |
-| ---------------------------------------------- | ------------------------: | -------------------------------: |
-| Detected sessions with citation hallucinations |                      ~15% |                            <1.5% |
-| Context-boundary misattributions               |                    Common | Near zero after sentinel tagging |
-| Interpolated identifiers                       |                Occasional |  Caught by validator / API check |
-| Outdated or superseded citations               |     Previously undetected |         Flagged through metadata |
-| Unsupported reasoning using real citations     | Previously hard to detect |          Surfaced by critic pass |
+| Failure mode                               |                    Before |                            After |
+| ------------------------------------------ | ------------------------: | -------------------------------: |
+| Context-boundary misattributions           |                    Common | Near zero after sentinel tagging |
+| Interpolated identifiers                   |                Occasional |  Caught by validator / API check |
+| Outdated or superseded citations           |     Previously undetected |         Flagged through metadata |
+| Unsupported reasoning using real citations | Previously hard to detect |          Surfaced by critic pass |
 
 These are detection-rate results under this project's validation definitions. They do not imply general legal correctness or universal hallucination elimination, and they are not reproducible from this repo. See [PROOF.md](./PROOF.md) and [docs/eval-notes.md](./docs/eval-notes.md) for the boundary.
 
@@ -423,6 +424,11 @@ This is a reference implementation and local demo server. Before exposing it pub
 * [docs/architecture.md](./docs/architecture.md) — wiring of the five-layer pipeline, with file-by-file responsibilities.
 * [docs/failure-modes.md](./docs/failure-modes.md) — the four hallucination categories the pipeline is designed to catch, with the production-log signature of each.
 * [docs/eval-notes.md](./docs/eval-notes.md) — scoring formula, test invocation, and an example of an optimizer-evolved prompt.
+
+## Related Work
+
+* [decision-lens](https://github.com/va2ai/decision-lens) — multi-agent document analysis pipeline (LangGraph + LiteLLM + Instructor + ChromaDB + FastAPI + React) that uses the same grounded-generation and adversarial-critic patterns to turn dense administrative decisions into citation-checked reports.
+* [vaclaims.net](https://vaclaims.net) — V2V Intelligence, the production SaaS where this validation architecture runs.
 
 ## License
 
