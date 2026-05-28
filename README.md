@@ -331,7 +331,16 @@ For real deployments, logs should be redacted or hashed before storing sensitive
 
 ## Regression Testing
 
-Frozen failure cases live in `tests/regression/cases/`.
+The repository ships one frozen failure case per documented failure mode in `tests/regression/cases/`:
+
+| Case | Failure mode | Fix under test |
+| ---- | ------------ | -------------- |
+| `001-context-boundary` | Adjacent-source attribution bleed | Sentinel-tagged retrieval |
+| `002-interpolated-identifier` | Plausible-but-fabricated case names from training data | Grounding constraint |
+| `003-outdated-citation` | Superseded authority cited as current | Temporal metadata validation |
+| `004-fabricated-docket` | Invented docket numbers when asked to enumerate | Post-generation validation |
+
+These are exemplars, not the long tail. The long tail is covered by JSONL session monitoring (see [Monitoring](#monitoring)) — every production session writes a structured record, and drift in `hallucinated` / `outdated` / `notInSources` counts surfaces new failure shapes that haven't been frozen yet. New shapes get promoted into `cases/` as they appear.
 
 Run:
 
@@ -339,16 +348,11 @@ Run:
 npm run test:regression
 ```
 
-Each case defines:
-
-* the failure mode
-* the query that triggers it
-* expected verified citations
-* expected outdated citations
-* known bad citations that must not be verified
-* the fix expected to catch the issue
+Each case JSON defines the failure mode, the query that triggers it, expected verified citations, expected outdated citations, known bad citations that must not be verified, and the fix expected to catch the issue.
 
 The current regression runner uses live LLM calls and therefore requires `ANTHROPIC_API_KEY`. For stricter CI, split this into deterministic frozen-response tests and optional LLM integration tests. See [docs/eval-notes.md](./docs/eval-notes.md) for the test command and scoring notes.
+
+The aggregation / reasoning-error failure mode (mode 4 in [The Problem](#the-problem)) is currently covered only by the adversarial critic pass at runtime, not by a frozen regression case — promoting a representative critic-caught failure into `cases/` is an open follow-up.
 
 ## Results
 
