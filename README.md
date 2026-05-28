@@ -189,6 +189,8 @@ The architecture is identifier-agnostic. Swap the extractor schema and verificat
 
 ## Running the Demo
 
+> **No hosted demo.** The validator needs a caller-supplied `ANTHROPIC_API_KEY` to run, so a public-facing instance would either expose a key or proxy through a backend whose budget is unrelated to anything the validator demonstrates. Clone and run locally — the GUI loads in one `npm install` + one `node server.js`, and the `--ungrounded` flag reproduces every failure mode shown in [Results](#results) without any sources of your own.
+
 Install dependencies and copy the environment template:
 
 ```bash
