@@ -1,7 +1,9 @@
 {
-  "name": "bva-citation-validator",
+  "name": "citation-validator",
   "version": "1.0.0",
-  "description": "Post-generation citation validator for BVA legal intelligence platform",
+  "description": "Post-generation hallucination validator for LLM citations and structured references in RAG pipelines",
+  "license": "MIT",
+  "author": "Christopher Combs",
   "type": "module",
   "main": "validator.js",
   "scripts": {

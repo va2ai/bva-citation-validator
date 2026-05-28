@@ -10,6 +10,11 @@ system-prompt.txt
 # Local agent / IDE session state — not part of the project.
 .omc/
 .claude/
+.gemini/
 
 # Personal portfolio dashboard data — not part of this project.
 projects/
+
+# AI assistant config — keep local, do not publish
+CLAUDE.md
+GEMINI.md

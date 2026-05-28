@@ -426,4 +426,4 @@ This is a reference implementation and local demo server. Before exposing it pub
 
 ## License
 
-No license file is included yet. Add a license before encouraging external reuse.
+MIT — see [LICENSE](LICENSE).
